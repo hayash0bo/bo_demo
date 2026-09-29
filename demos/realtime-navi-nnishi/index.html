@@ -1,0 +1,3384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bring Out — リアルタイムナビ N西デモ（アポ獲得確率・撤退サイン）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#7724EB; --purple-dark:#5E1CBC; --purple-bg:#F4EDFE; --purple-line:#E3D5FA;
+  --ink:#1F2430; --sub:#6B7280; --line:#E9E6F0; --bg:#F7F7F9; --card:#FFFFFF;
+  --ok:#0F9D58; --ok-bg:#E8F6EE; --ok-line:#BFE5CE;
+  --warn:#B45309; --warn-bg:#FFF7E6; --warn-line:#F3D9A4;
+  --err:#C0334D; --err-bg:#FDF0F3; --err-line:#F2C7D0;
+  --blue:#1256A0; --blue-bg:#EAF2FB; --blue-line:#C6DCF3;
+  --radius:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Zen Kaku Gothic New","Noto Sans JP",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.7}
+header{background:#fff;border-bottom:1px solid var(--line);padding:10px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:5}
+header .demo-tag{font-size:12px;font-weight:700;color:var(--purple);background:var(--purple-bg);border:1px solid var(--purple-line);border-radius:999px;padding:2px 10px}
+header .spacer{flex:1}
+.badge{font-size:12px;border-radius:999px;padding:3px 10px;font-weight:500;white-space:nowrap}
+.badge.mock{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.badge.live{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+main{max-width:1220px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:16px}
+h1{font-size:18px;font-weight:700}
+.lead{color:var(--sub);font-size:13px;margin-top:2px}
+.label{font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.08em;margin-bottom:6px}
+.settings{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.settings .field{display:flex;flex-direction:column;gap:4px}
+.settings label{font-size:11px;color:var(--sub);font-weight:500}
+input[type=password],input[type=text],select,textarea{font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius);background:#fff}
+input[type=password]{min-width:220px}
+select{min-width:180px}
+textarea{width:100%;resize:vertical;line-height:1.6}
+button{font-family:inherit;font-size:13px;font-weight:700;border:none;border-radius:var(--radius);padding:8px 16px;cursor:pointer}
+.btn-primary{background:var(--purple);color:#fff}
+.btn-primary:hover{background:var(--purple-dark)}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.note{font-size:11px;color:var(--sub);margin-top:8px}
+details.hearing{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+details.hearing summary{font-size:12px;font-weight:700;color:var(--sub);cursor:pointer}
+.hearing-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+.err-banner{background:var(--err-bg);border:1px solid var(--err-line);color:var(--err);border-radius:var(--radius);padding:10px 14px;font-size:13px;margin-bottom:16px;display:none;white-space:pre-wrap}
+/* メイン2カラム */
+.main-grid{display:grid;grid-template-columns:5fr 7fr;gap:16px;align-items:start}
+.panel-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.panel-head .meta{font-size:11px;color:var(--sub);margin-left:auto}
+/* 会話パネル */
+.rec-row{display:flex;align-items:center;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:10px;flex-wrap:wrap}
+.rec-btn{width:64px;height:64px;border-radius:50%;background:#fff;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;flex:none}
+.rec-btn .dot{width:24px;height:24px;border-radius:50%;background:#E0245E;transition:all .15s}
+.rec-btn:hover{border-color:#E0245E}
+.rec-btn.rec{border-color:#E0245E;background:#FDEDF2}
+.rec-btn.rec .dot{border-radius:5px;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.timer{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+#meter{width:150px;height:22px;background:#F1EFF6;border-radius:4px}
+.rec-hint{font-size:11px;color:var(--sub);width:100%}
+.tr-wrap{position:relative}
+.transcript{height:480px;overflow-y:auto;font-size:13px;scroll-behavior:auto}
+.seg{display:flex;gap:10px;padding:5px 6px;border-bottom:1px dashed #F0EEF5}
+.seg .t{color:var(--purple);font-variant-numeric:tabular-nums;font-size:11px;padding-top:3px;flex:none;width:40px}
+.seg.interim{color:var(--sub);font-style:italic;border-bottom:none}
+.seg.interim .t{color:#C9C4D6}
+.seg.now{background:var(--purple-bg);border-radius:4px;border-bottom-color:transparent}
+.seg.now .t{font-weight:700}
+.seg .who{flex:none;font-size:10px;font-weight:700;border-radius:4px;padding:1px 6px;margin-top:4px;height:fit-content;white-space:nowrap}
+.who-me{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-line)}
+.who-peer{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-line)}
+.tab-chip{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line);color:var(--sub);background:#FAFAFB;white-space:nowrap}
+.tab-chip.on{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line)}
+.jump-latest{position:absolute;right:12px;top:12px;font-size:11px;font-weight:700;background:var(--purple);color:#fff;border-radius:999px;padding:6px 14px;box-shadow:0 2px 10px rgba(31,36,48,.22);z-index:2}
+.jump-latest:hover{background:var(--purple-dark)}
+.empty-hint{color:var(--sub);font-size:12px;padding:20px 6px;text-align:center}
+/* シグナル判定（信号機バー） */
+.signal-bar{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;background:#FAFAFB;transition:all .2s}
+.signal-bar .lamps{display:flex;gap:6px;flex:none}
+.signal-bar .lamp{width:18px;height:18px;border-radius:50%;background:#E7E3F0;transition:all .2s}
+.signal-bar.s-green{border-color:var(--ok-line);background:#FBFEFC}
+.signal-bar.s-green .lamp.g{background:var(--ok);box-shadow:0 0 0 4px rgba(15,157,88,.16)}
+.signal-bar.s-yellow{border-color:#F3D9A4;background:#FFFDF4}
+.signal-bar.s-yellow .lamp.y{background:#E5A100;box-shadow:0 0 0 4px rgba(229,161,0,.18)}
+.signal-bar.s-red{border-color:var(--err-line);background:#FFFBFC}
+.signal-bar.s-red .lamp.r{background:var(--err);box-shadow:0 0 0 4px rgba(192,51,77,.18)}
+.signal-bar .sig-word{font-weight:700;font-size:15px}
+.signal-bar.s-green .sig-word{color:var(--ok)}
+.signal-bar.s-yellow .sig-word{color:#9A6E00}
+.signal-bar.s-red .sig-word{color:var(--err)}
+.signal-bar .meta{margin-left:auto;font-size:11px;color:var(--sub);white-space:nowrap}
+/* アポ獲得確率（架電モード） */
+.apo-bar{display:flex;align-items:center;gap:14px;border:1.5px solid var(--purple-line);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;background:#FDFBFF}
+.apo-bar .apo-lbl{font-size:11px;font-weight:700;color:var(--purple);white-space:nowrap}
+.apo-bar .apo-num{font-size:28px;font-weight:700;line-height:1;color:var(--ink,#1F2430);min-width:74px;font-variant-numeric:tabular-nums;transition:color .2s}
+.apo-bar .apo-num small{font-size:14px;margin-left:1px}
+.apo-bar .apo-delta{font-size:12px;font-weight:700;min-width:42px;white-space:nowrap}
+.apo-bar .apo-delta.up{color:var(--ok)} .apo-bar .apo-delta.down{color:var(--err)} .apo-bar .apo-delta.flat{color:var(--sub)}
+.apo-bar .apo-main{flex:1;min-width:0}
+.apo-bar .apo-track{height:8px;border-radius:999px;background:#EEEAF5;overflow:hidden}
+.apo-bar .apo-fill{height:100%;width:0;border-radius:999px;background:var(--purple);transition:width .5s ease, background .3s}
+.apo-bar .apo-reason{font-size:11px;color:var(--sub);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apo-bar svg{flex:none}
+.apo-bar.lv-low .apo-fill{background:#E5A100} .apo-bar.lv-high .apo-fill{background:var(--ok)}
+.cue-card.v-retreat{border-color:#F3D9A4;background:#FFFDF4}
+.cue-card.v-retreat .cue-verdict{background:#FFF4D6;color:#9A6E00}
+.counter-box.retreat{background:#FFF8E6;border-color:#F3D9A4}
+.counter-box.retreat .sig{color:#9A6E00}
+/* カンペ */
+.cue-card{border:2px solid var(--line);border-radius:var(--radius);padding:16px 18px;transition:border-color .2s, background .2s}
+.cue-card .cue-verdict{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:3px 12px;margin-bottom:8px}
+.cue-card h2{font-size:21px;font-weight:700;line-height:1.45}
+.cue-card .cue-detail{font-size:13px;color:var(--sub);margin-top:6px}
+.cue-card.v-ok{border-color:var(--ok-line);background:#FBFEFC}
+.cue-card.v-ok .cue-verdict{background:var(--ok-bg);color:var(--ok)}
+.cue-card.v-dig{border-color:var(--purple-line);background:#FDFBFF}
+.cue-card.v-dig .cue-verdict{background:var(--purple-bg);color:var(--purple)}
+.cue-card.v-exit{border-color:var(--err-line);background:#FFFBFC}
+.cue-card.v-exit .cue-verdict{background:var(--err-bg);color:var(--err)}
+.cue-card.v-wrap{border-color:var(--blue-line);background:#FBFDFF}
+.cue-card.v-wrap .cue-verdict{background:var(--blue-bg);color:var(--blue)}
+.cue-card.updating{opacity:.75}
+.counter-box{margin-top:10px;background:var(--err-bg);border:1px solid var(--err-line);border-radius:var(--radius);padding:10px 12px;font-size:13px}
+.counter-box .sig{font-size:11px;font-weight:700;color:var(--err)}
+.q-list{margin-top:12px}
+.q-item{background:#FAF9FC;border:1px solid #F0EEF5;border-left:3px solid var(--purple);border-radius:var(--radius);padding:8px 12px;margin-bottom:6px;font-size:13px}
+/* タブナビゲーション */
+#tabNav{max-width:1220px;margin:0 auto;padding:10px 20px 0;display:flex;gap:4px;align-items:flex-end}
+#tabNav button{font-family:inherit;font-size:13.5px;font-weight:700;background:none;border:none;border-bottom:3px solid transparent;color:var(--sub);padding:8px 14px 9px;cursor:pointer;border-radius:6px 6px 0 0;white-space:nowrap}
+#tabNav button:hover{background:#F1EFF6}
+#tabNav button.active{color:var(--purple);border-bottom-color:var(--purple)}
+#tabNav button svg{width:14px;height:14px;vertical-align:-2px;margin-right:6px}
+#tabNav .lock{font-size:9.5px;font-weight:700;color:#fff;background:#B9B4C6;border-radius:999px;padding:1px 6px;margin-left:5px;vertical-align:1px}
+#tabNav button.active .lock{background:var(--purple)}
+#tabStatus{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--sub);padding-bottom:8px;cursor:pointer}
+#recMini{width:10px;height:10px;border-radius:50%;background:#D9D4E5}
+#recMini.on{background:#E0245E;animation:pulse 1.2s infinite}
+#timerMini{font-variant-numeric:tabular-nums;font-weight:700}
+/* トピックツリービュー */
+.tree-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.tree-zoom{margin-left:auto;display:flex;gap:6px;align-items:center}
+.tree-zoom button{font-family:inherit;font-size:13px;font-weight:700;border:1px solid #E4E1EA;background:#fff;border-radius:6px;min-width:30px;height:30px;cursor:pointer;padding:0 8px}
+.tree-zoom .pct{font-size:12px;color:var(--sub);width:44px;text-align:center;font-variant-numeric:tabular-nums}
+#treeVp{position:relative;height:calc(100vh - 265px);min-height:380px;overflow:hidden;cursor:grab;background:#FBFAFD;border:1px solid var(--line);border-radius:var(--radius)}
+#treeVp.dragging{cursor:grabbing}
+#treeCanvas{transform-origin:0 0;width:max-content;padding:34px 90px 90px 26px}
+#treeChapters{position:relative}
+#treeChapters::before{content:"";position:absolute;left:18px;top:22px;bottom:8px;border-left:2.5px dashed var(--purple-line)}
+.chapter{display:flex;align-items:center;margin-bottom:26px;position:relative}
+.ch-head{width:186px;flex:none;background:var(--purple-bg);border:1px solid var(--purple-line);border-left:5px solid var(--purple);border-radius:8px;padding:8px 12px;position:relative;z-index:1}
+.ch-head .no{font-size:10px;font-weight:700;color:var(--purple);letter-spacing:.06em}
+.ch-head .ttl{font-size:13.5px;font-weight:700;line-height:1.4}
+.tree ul{display:flex;flex-direction:column;position:relative}
+.tree ul::before{content:"";position:absolute;left:-26px;top:50%;width:26px;border-top:2px solid #D9D4E5}
+.tree li{display:flex;align-items:center;position:relative;padding:5px 0 5px 26px;list-style:none}
+.tree li::before{content:"";position:absolute;left:0;top:50%;width:26px;border-top:2px solid #D9D4E5}
+.tree li::after{content:"";position:absolute;left:0;top:0;bottom:0;border-left:2px solid #D9D4E5}
+.tree li:first-child::after{top:50%}
+.tree li:last-child::after{bottom:50%}
+.tree li:only-child::after{display:none}
+.tree li>ul{margin-left:26px}
+.tree li.return::before{border-top-style:dashed;border-top-color:var(--purple)}
+.tnode{background:#fff;border:1.5px solid #E4E1EA;border-radius:8px;padding:6px 11px;font-size:12.5px;line-height:1.5;max-width:250px;box-shadow:0 1px 4px rgba(31,36,48,.08);position:relative}
+.tnode.popin{animation:tpop .45s cubic-bezier(.2,1.4,.5,1) backwards}
+@keyframes tpop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.tnode .tm{font-size:10px;color:#ABA5BC;margin-left:7px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tnode.point{border-left:4px solid #E5A100}
+.tnode.info{border-left:4px solid #4A90D9}
+.tnode.decide{border-color:#E2B93B;background:#FFF9E3;font-weight:700;border-left-width:4px}
+.tnode.decide::after{content:"決定";position:absolute;top:-10px;right:-8px;background:#B4530A;color:#fff;font-size:9.5px;font-weight:700;border-radius:999px;padding:1.5px 9px}
+.tnode.task{border:1.8px solid var(--ink)}
+.tnode.task::after{content:"宿題";position:absolute;top:-10px;right:-8px;background:var(--purple);color:#fff;font-size:9.5px;font-weight:700;border-radius:999px;padding:1.5px 9px}
+.tnode.hot{border-left:4px solid #C0334D;background:#FFF8F9}
+.tnode.hot::after{content:"白熱";position:absolute;top:-10px;right:-8px;background:#C0334D;color:#fff;font-size:9.5px;font-weight:700;border-radius:999px;padding:1.5px 9px}
+.tnode.ret{border-style:dashed;border-color:var(--purple-line);background:#FBF9FF}
+.tnode .back{display:inline-block;background:var(--purple-bg);color:var(--purple);font-size:9.5px;font-weight:700;border-radius:999px;padding:1px 7px;margin-right:5px}
+.tree-legend{display:flex;gap:14px;font-size:11.5px;color:var(--sub);margin-top:8px;flex-wrap:wrap}
+.tree-legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:3px}
+/* ナレッジアシスト */
+.ent-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ent-chip{font-size:12px;font-weight:700;border-radius:999px;padding:4px 12px;border:1.5px solid var(--line);background:#fff}
+.ent-chip .k{font-size:10px;font-weight:700;border-radius:999px;padding:1px 7px;margin-right:6px;vertical-align:1px}
+.ent-chip.competitor{border-color:#F2C4CE}
+.ent-chip.competitor .k{background:#FCE8EC;color:#C0334D}
+.ent-chip.partner{border-color:#C9DFF5}
+.ent-chip.partner .k{background:#E7F1FB;color:#2E6DA4}
+.ent-chip.unknown{border-color:var(--purple-line)}
+.ent-chip.unknown .k{background:var(--purple-bg);color:var(--purple)}
+.ent-chip .cnt{color:var(--sub);font-weight:500;font-size:11px;margin-left:5px}
+.ent-note{font-size:11px;color:var(--sub);margin-top:4px}
+.voc-row{border:1.5px solid var(--line);border-radius:var(--radius);padding:9px 12px;margin-top:8px;font-size:13px;background:#FAFAFB}
+.voc-row .vt{font-size:10.5px;font-weight:700;border-radius:999px;padding:1.5px 9px;margin-right:8px}
+.voc-row.v-req .vt{background:var(--purple-bg);color:var(--purple)}
+.voc-row.v-neg .vt{background:#FCE8EC;color:#C0334D}
+.voc-row.v-pos .vt{background:var(--ok-bg);color:var(--ok)}
+.voc-row .tgt{font-weight:700}
+.voc-row .miss{font-size:12px;color:var(--purple);border-top:1px dashed var(--purple-line);margin-top:5px;padding-top:5px}
+.kb-card{border:1.5px solid var(--warn-line);background:var(--warn-bg);border-radius:var(--radius);padding:9px 12px;margin-top:8px;font-size:12.5px;line-height:1.6}
+.kb-card .kt{font-weight:700;font-size:12.5px;margin-bottom:2px}
+/* セッション履歴 */
+.hist-row{display:flex;gap:12px;align-items:center;padding:8px 4px;border-bottom:1px dashed #F0EEF5;font-size:13px;flex-wrap:wrap}
+.hist-when{color:var(--purple);font-variant-numeric:tabular-nums;flex:none;font-weight:700}
+.hist-name{font-weight:700}
+.hist-info{color:var(--sub);font-size:12px}
+.hist-btns{margin-left:auto;display:flex;gap:6px}
+.hist-btns .btn-ghost{padding:4px 10px;font-size:12px}
+/* 構造化メモのMarkdown表示 */
+.md-h{font-weight:700;line-height:1.5}
+.md-h2{font-size:15px;color:var(--purple);border-bottom:1px solid var(--purple-line);padding-bottom:4px;margin:16px 0 8px}
+#memoBody .md-h2:first-child{margin-top:0}
+.md-h3{font-size:14px;margin:10px 0 4px}
+.md-ul{margin:4px 0 10px 22px}
+.md-ul li{margin:3px 0}
+.md-ul li.md-task{list-style:none;margin-left:-18px}
+.md-p{margin:4px 0}
+/* 確認項目の充足パネル */
+.check-panel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.check-item{border:1.5px solid var(--line);border-radius:var(--radius);padding:10px 12px;display:flex;gap:10px;align-items:flex-start;background:#FAFAFB}
+.check-item .ic{font-size:17px;font-weight:700;flex:none;color:#B9B4C6;line-height:1.4}
+.check-item .nm{font-size:14.5px;font-weight:700;line-height:1.45}
+.check-item .note{font-size:12px;color:var(--sub);margin-top:2px}
+.check-item .ask{font-size:12px;color:var(--purple);font-weight:500;margin-top:3px;border-top:1px dashed var(--purple-line);padding-top:3px}
+.skill-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.skill-list .check-item{width:100%}
+.skill-list .check-item .nm{font-size:13.5px}
+.check-item.st-filled{border-color:var(--ok-line);background:var(--ok-bg)}
+.check-item.st-filled .ic{color:var(--ok)}
+.check-item.st-partial{border-color:var(--warn-line);background:var(--warn-bg)}
+.check-item.st-partial .ic{color:var(--warn)}
+.check-item.st-missing .nm{color:#8A8498;font-weight:500}
+.check-note{color:var(--sub);font-size:11px}
+@media(max-width:1100px){.check-panel{grid-template-columns:1fr}}
+/* カバレッジバー */
+.cov-track{display:flex;height:12px;border-radius:999px;overflow:hidden;background:#E7E3F0;margin-top:6px}
+.cov-track>div{transition:flex .3s}
+.cov-text{font-size:11px;color:var(--sub);margin-top:5px}
+/* テンプレートバー（デモ画面） */
+.tpl-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 20px}
+/* カンペ履歴 */
+.cue-log{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;max-height:150px;overflow-y:auto}
+.cue-log .row{display:flex;gap:8px;font-size:11px;color:var(--sub);padding:2px 0}
+.cue-log .row .t{color:var(--purple);font-variant-numeric:tabular-nums;flex:none;width:40px}
+.cue-log .row .v{flex:none;font-weight:700;width:96px}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--purple-line);border-top-color:var(--purple);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+footer{max-width:1220px;margin:0 auto;padding:6px 20px 30px;color:var(--sub);font-size:11px}
+.hidden{display:none!important}
+@media(max-width:960px){.main-grid{grid-template-columns:1fr}.hearing-grid{grid-template-columns:1fr}.transcript{height:300px}}
+</style>
+</head>
+<body>
+<header>
+  <svg width="105" height="28" viewBox="0 0 654 172" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="85.5334" height="85.5334" transform="matrix(-0.866025 0.5 0.866025 0.5 74.0742 0)" fill="url(#sb_p0)"/>
+    <g style="mix-blend-mode:overlay" opacity="0.6"><rect width="85.5334" height="85.5334" transform="matrix(-0.866025 0.5 0.866025 0.5 74.0742 0)" fill="url(#sb_p1)"/></g>
+    <circle cx="74.1594" cy="76.9802" r="20.528" fill="white"/>
+    <rect width="85.5334" height="85.5334" transform="matrix(-0.866025 -0.5 0 1 74.0771 85.5336)" fill="#282828"/>
+    <path d="M74.0776 85.5336L148.152 42.7669V128.3L74.0776 171.067V85.5336Z" fill="black"/>
+    <path d="M245.325 82.387C247.24 80.161 248.389 77.2355 248.389 74.0555C248.389 66.9959 242.58 61.272 235.494 61.272L200 61.2084V105.728L237.983 105.792C245.069 105.792 250.879 100.004 250.879 92.9445C250.879 88.5562 248.644 84.6766 245.325 82.387ZM231.6 72.4019C233.323 72.4019 234.728 73.7375 234.728 75.4547C234.728 77.1719 233.323 78.571 231.6 78.571H213.597V72.4019H231.6ZM234.089 94.6617H213.597V88.429H234.089C235.813 88.429 237.217 89.8281 237.217 91.5453C237.217 93.2625 235.813 94.6617 234.089 94.6617Z" fill="black"/>
+    <path d="M292.671 105.792H308.056L300.523 91.5453C304.8 88.4926 307.609 83.5318 307.609 77.935C307.609 68.7131 300.077 61.272 290.82 61.272H256.731V105.792H270.328V94.6617H286.798L292.671 105.792ZM270.328 72.4019H288.33C291.458 72.4019 293.948 74.8823 293.948 77.935C293.948 80.9878 291.458 83.5318 288.33 83.5318H270.328V72.4019Z" fill="black"/>
+    <path d="M327.433 105.792V61.272H313.836V105.792H327.433Z" fill="black"/>
+    <path d="M374.863 61.272V89.065L350.03 61.272H335.156V105.792H348.754V79.3342L372.374 105.792H388.525V61.272H374.863Z" fill="black"/>
+    <path d="M424.34 82.2598V92.1813H434.426C432.192 94.9797 428.297 95.8701 423.127 95.8701C414.445 95.8701 409.465 93.3897 409.465 83.5318C409.465 73.6103 414.445 71.1299 423.127 71.1299C429.702 71.1299 434.043 72.5291 435.83 77.2991H451.151C448.917 64.7064 439.341 60 423.127 60C404.486 60 394.591 66.1691 394.591 83.5318C394.591 102.039 405.763 107 423.127 107C430.851 107 437.107 106.173 441.703 103.82V105.792H451.662V82.2598H424.34Z" fill="black"/>
+    <path d="M543.242 83.5318C543.242 66.1691 533.283 60 514.706 60C496.066 60 486.171 66.1691 486.171 83.5318C486.171 102.039 497.279 107 514.706 107C533.283 107 543.242 102.039 543.242 83.5318ZM528.367 83.5318C528.367 93.3897 523.388 95.8701 514.706 95.8701C506.024 95.8701 501.045 93.3897 501.045 83.5318C501.045 73.6103 506.024 71.1299 514.706 71.1299C523.516 71.1299 528.367 73.6103 528.367 83.5318Z" fill="black"/>
+    <path d="M548.532 83.5318C548.532 102.039 559.639 107 574.577 107C589.452 107 600.623 102.039 600.623 83.5318V61.272H586.962V83.5318C586.962 93.3897 582.046 95.8701 574.577 95.8701C567.108 95.8701 562.129 93.3897 562.129 83.5318V61.272H548.532V83.5318Z" fill="black"/>
+    <path d="M654 61.272H604.398V72.4019H622.336V105.792H635.998V72.4019H654V61.272Z" fill="black"/>
+    <defs>
+      <radialGradient id="sb_p0" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(73.5427 73.4573) rotate(-135) scale(113.844 92.3143)"><stop offset="0.110479" stop-color="#FFC961"/><stop offset="0.481121" stop-color="#FB4FDF"/><stop offset="0.823613" stop-color="#8B38FF"/></radialGradient>
+      <radialGradient id="sb_p1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(85.4842 85.5826) rotate(-135) scale(139.107 80.3134)"><stop stop-color="white"/><stop offset="1" stop-color="white" stop-opacity="0"/></radialGradient>
+    </defs>
+  </svg>
+  <span class="demo-tag">リアルタイムナビ N西デモ</span>
+  <div class="spacer"></div>
+  <a id="setupLink" class="btn-ghost" style="text-decoration:none;font-size:12px;padding:5px 12px" href="#setup" target="_blank">設定を別タブで開く</a>
+  <span id="modeBadge" class="badge mock">モック動作（キー未設定）</span>
+</header>
+
+<nav id="tabNav">
+  <button data-tab="tree"><svg viewBox="0 0 16 16"><path d="M4.8 8h3M9.5 4.5c-2.5 0-2.5 3.5-2.5 3.5s0 3.5 2.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"/><circle cx="3" cy="8" r="1.9" fill="currentColor"/><circle cx="12" cy="4.5" r="1.9" fill="currentColor"/><circle cx="12" cy="11.5" r="1.9" fill="currentColor"/></svg>トピックツリー</button>
+  <button data-tab="transcript" class="active"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6.5" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"/></svg>書き起こし</button>
+  <button data-tab="memo"><svg viewBox="0 0 16 16"><path d="M4 2.5h5.5L13 6v7.5H4z" stroke="currentColor" fill="none" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.5 2.5V6H13" stroke="currentColor" fill="none" stroke-width="1.4" stroke-linejoin="round"/><path d="M6 9h5M6 11.5h3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>構造化要約</button>
+  <button data-tab="cue"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" stroke="currentColor" fill="none" stroke-width="1.5"/><path d="M5.6 8.1l1.8 1.8 3.2-3.6" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>確認<span class="lock">社内</span></button>
+  <button data-tab="setup"><svg viewBox="0 0 16 16"><path d="M3 5.2h10M3 10.8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="6.2" cy="5.2" r="1.9" fill="currentColor"/><circle cx="10.2" cy="10.8" r="1.9" fill="currentColor"/></svg>設定<span class="lock">社内</span></button>
+  <span id="tabStatus" title="書き起こしタブへ"><span id="recMini"></span><span id="timerMini">0:00</span></span>
+</nav>
+
+<main>
+  <div class="card" id="setupCard">
+    <h1>Bring Out リアルタイムナビゲーション（汎用版）</h1>
+    <p class="lead">開始前にヒアリングテンプレート（例: MEDDPICC）を選ぶと、会話をリアルタイムに書き起こしながら「どの項目がどこまで聞けているか」を確認済み／一部／未確認の3段階で判定し、次の問いかけを提案します。テンプレートは自分で作って保存できます。キー未設定でもモック会話で流れを確認できます。</p>
+    <div style="margin-top:12px" class="settings">
+      <div class="field"><label>OpenAI APIキー（カンペ判定＋書き起こし）</label><input type="password" id="keyInput" placeholder="sk-..." autocomplete="off"></div>
+      <div class="field"><label>ElevenLabs APIキー（任意・Scribe書き起こし用）</label><input type="password" id="elKeyInput" placeholder="ElevenLabsのキー" autocomplete="off"></div>
+      <button class="btn-primary" id="keyBtn">設定</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);padding-bottom:8px"><input type="checkbox" id="persistChk" checked>キーをこのブラウザに保存</label>
+      <div class="field hidden" id="modeField"><label>書き起こしの接続方式</label>
+        <select id="modeSel">
+          <option value="realtime">OpenAI リアルタイム（推奨）</option>
+          <option value="scribe" id="scribeOpt" disabled>ElevenLabs Scribe v2（低遅延・要ELキー）</option>
+          <option value="chunk">OpenAI 5秒区切り送信（保険モード）</option>
+        </select>
+      </div>
+      <div class="field hidden" id="sttField"><label>書き起こしモデル</label><select id="sttSel"></select></div>
+      <div class="field hidden" id="llmField"><label>ナビ判定モデル</label><select id="llmSel"></select></div>
+    </div>
+    <details class="hearing" open>
+      <summary>ヒアリングテンプレート（ゴールと確認項目。ナビの判定に使われます）</summary>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">
+        <div class="field" style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:11px;color:var(--sub);font-weight:500">テンプレート</label>
+          <select id="tplSel" class="tpl-sel" style="min-width:240px"></select>
+        </div>
+        <div class="field" style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:11px;color:var(--sub);font-weight:500">名前を付けて保存（編集内容を残す）</label>
+          <input type="text" id="tplName" placeholder="例: 更新面談用" style="min-width:200px">
+        </div>
+        <button class="btn-ghost" id="tplSaveBtn">保存</button>
+        <button class="btn-ghost" id="tplDelBtn">削除</button>
+      </div>
+      <div class="hearing-grid">
+        <div>
+          <div class="label" style="margin-top:8px">この会話のゴール</div>
+          <input type="text" id="goalInput" style="width:100%" value="課題と決裁構造を把握し、次回商談（デモ・提案）の日時に合意する">
+        </div>
+        <div>
+          <div class="label" style="margin-top:8px">確認したい項目（1行1項目。「ラベル: 何を確認するか」の形が判定しやすい）</div>
+          <textarea id="checkInput" rows="9">Metrics（成果指標）: 導入効果をどんな数字で測るか（時間・件数・金額）
+Economic Buyer（決裁者）: 予算の最終決裁者は誰か
+Decision Criteria（選定基準）: ツール・ベンダーを選ぶ基準は何か
+Decision Process（決定プロセス）: 誰がどの順で関与し、いつまでに決まるか
+Paper Process（契約手続き）: 稟議・法務・購買の手順と所要期間
+Identify Pain（課題・痛み）: 何に困っていて、放置すると何が起きるか
+Champion（推進者）: 社内で推進してくれる人と、その影響力
+Competition（競合）: 比較検討中の他社・代替手段（現状維持を含む）</textarea>
+        </div>
+      </div>
+    </details>
+    <p class="note">キーはファイルやログには書き込みません。「キーをこのブラウザに保存」をONにすると、このパソコンのブラウザ内にだけ保存され次回から入力不要になります（共有PCではOFF推奨。OFFに切り替えると保存分は即削除）。接続方式・モデル・ヒアリング設定・マイク選択は自動で保存・復元されます。音声は書き起こしのため選択した接続先（OpenAIまたはElevenLabs）に、書き起こしテキストは判定のためOpenAIに送信されます。実際のお客様との会話で使う場合は、社名・個人情報の扱いにご注意ください。</p>
+    <div id="setupNote" class="hidden" style="margin-top:12px;padding:10px 14px;background:var(--purple-bg);border:1px solid var(--purple-line);border-radius:var(--radius);font-size:12px">
+      これは<b>設定タブ</b>です。ここでの設定（キー・接続方式・モデル・ヒアリング設定）は、開いている<b>デモ画面のタブへ自動で反映</b>されます。モデル名などの技術情報はデモ画面には表示されません。
+      <a href="./" target="_blank" style="color:var(--purple);font-weight:700">デモ画面を開く</a>
+    </div>
+  </div>
+
+  <div class="err-banner" id="errBanner"></div>
+
+  <div class="card tpl-bar" id="tplBar">
+    <div class="label" style="margin:0">会議タイトル</div>
+    <input type="text" id="titleInput" placeholder="例: 山田製作所さま 定例" style="min-width:220px;padding:7px 10px">
+    <div class="label" style="margin:0">ヒアリングテンプレート</div>
+    <select id="tplSelDemo" class="tpl-sel" style="min-width:250px"></select>
+    <span id="durWrap" class="hidden" style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--sub)">予定時間 <input type="number" id="durInput" min="10" max="480" step="5" value="60" style="width:64px;padding:5px 8px"> 分</span>
+    <span class="note" style="margin:0">開始前に選んでください。内容の編集・新規作成は「設定」タブからできます。</span>
+    <div id="agendaWrap" class="hidden" style="width:100%">
+      <div class="label" style="margin-top:4px">アジェンダ（1行1議題。構造化メモの骨格になります）</div>
+      <textarea id="agendaInput" rows="3" placeholder="例:&#10;Q3進捗の確認&#10;新機能のリリース日程&#10;採用の状況"></textarea>
+    </div>
+  </div>
+
+  <div class="card hidden" id="treeCard">
+    <div class="tree-head">
+      <div class="label" style="margin:0">トピックツリー（議論の地図・自動で育ちます）</div>
+      <span class="meta" id="treeMeta"></span>
+      <div class="tree-zoom">
+        <button id="tzOut">−</button><span class="pct" id="tzPct">100%</span><button id="tzIn">＋</button><button id="tzFit" style="font-size:11px">全体</button>
+      </div>
+    </div>
+    <div id="treeVp"><div id="treeCanvas"><div id="treeChapters"><div class="empty-hint" style="padding:40px">会話が始まると、ここに議論の地図が育ちます（ホイールでズーム・ドラッグで移動）</div></div></div></div>
+    <div class="tree-legend">
+      <span><span class="sw" style="background:#E5A100"></span>論点</span>
+      <span><span class="sw" style="background:#4A90D9"></span>情報・事例</span>
+      <span><span class="sw" style="background:#B4530A"></span>決定</span>
+      <span><span class="sw" style="background:var(--purple)"></span>宿題</span>
+      <span><span class="sw" style="background:#C0334D"></span>白熱した論点</span>
+      <span style="color:var(--purple)">紫の点線 = 元の話題に戻って派生した枝（戻り）</span>
+    </div>
+  </div>
+
+  <div id="mainWrap">
+    <div class="card" id="convCard" style="margin-bottom:16px">
+      <div class="panel-head"><div class="label" style="margin:0">会話（リアルタイム書き起こし）</div><span id="trBadge"></span><span class="meta" id="trMeta"></span></div>
+      <div class="rec-row">
+        <div class="rec-btn" id="recBtn" title="クリックで開始 / 停止"><div class="dot"></div></div>
+        <div>
+          <div class="timer" id="timer">0:00</div>
+          <canvas id="meter" width="150" height="22"></canvas>
+          <div style="font-size:11px;color:var(--sub)" id="meterPct">入力レベル: —</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:11px;color:var(--sub);font-weight:500">マイク</label>
+          <select id="micSel" style="min-width:140px;max-width:210px"><option value="">既定のマイク</option></select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:11px;color:var(--sub);font-weight:500">集音のしかた</label>
+          <select id="pickupSel" style="min-width:190px">
+            <option value="near">自分の声メイン（ヘッドセット）</option>
+            <option value="far">周囲の声も拾う（複数人・電話）</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:11px;color:var(--sub);font-weight:500">リモート会議（Zoom/Teams）の相手の声</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-ghost" id="tabAudioBtn" style="padding:6px 10px;font-size:12px">会議の音声を取り込む</button>
+            <span class="tab-chip" id="tabAudioChip">未接続</span>
+          </div>
+        </div>
+        <div style="margin-left:auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <button class="btn-ghost" id="mockBtn">モック会話を再生（キー不要）</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn-ghost" id="stopBtn" disabled>■ 停止</button>
+            <button class="btn-ghost" id="restartBtn">↺ 最初から</button>
+          </div>
+        </div>
+        <div class="rec-hint" id="recHint">赤いボタンで開始。対面はこのままでOK。Zoom/Teamsのリモート会議は「会議の音声を取り込む」を押してから開始してください（ブラウザ会議=会議タブを共有、デスクトップアプリの会議=画面全体＋システム音声。ヘッドホン推奨）。</div>
+      </div>
+      <div class="tr-wrap">
+        <div class="transcript" id="transcript"><div class="empty-hint">ここに会話が流れます</div></div>
+        <button class="jump-latest hidden" id="jumpBtn" type="button">↑ 最新の発言へ</button>
+      </div>
+      <details id="connLog" style="display:none;margin-top:8px">
+        <summary style="font-size:11px;color:var(--sub);cursor:pointer">接続ログ（うまく動かないときは、ここを開いて内容を共有してください）</summary>
+        <div id="connLogBody" style="max-height:140px;overflow-y:auto;font-size:11px;color:var(--sub);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;margin-top:4px"></div>
+      </details>
+    </div>
+
+    <div class="card" id="naviCard" style="margin-bottom:0">
+      <div class="panel-head"><div class="label" style="margin:0">ナビ（カンペ）</div><span id="cueBadge"></span><span class="meta" id="cueMeta"></span></div>
+      <div class="signal-bar" id="signalBar">
+        <div class="lamps"><span class="lamp g"></span><span class="lamp y"></span><span class="lamp r"></span></div>
+        <span class="sig-word" id="sigWord">—</span>
+        <span class="meta" id="sigMeta">シグナル判定：発話ごとに即時更新</span>
+      </div>
+      <div class="apo-bar hidden" id="apoBar">
+        <div class="apo-lbl">アポ獲得確率</div>
+        <div class="apo-num" id="apoNum">—</div>
+        <div class="apo-delta flat" id="apoDelta"></div>
+        <div class="apo-main"><div class="apo-track"><div class="apo-fill" id="apoFill"></div></div><div class="apo-reason" id="apoReason">会話が始まると、発話ごとに更新されます</div></div>
+        <svg id="apoSpark" width="120" height="32" viewBox="0 0 120 32" aria-hidden="true"></svg>
+      </div>
+      <div class="cue-card" id="cueCard">
+        <span class="cue-verdict" id="cueVerdict" style="background:#F1EFF6;color:var(--sub)">待機中</span>
+        <h2 id="cueHeadline">会話が始まると、ここに指示が出ます</h2>
+        <span class="branch-chip hidden" id="branchChip"></span>
+        <p class="cue-detail" id="cueDetail">数発話ごとに判定が更新されます。</p>
+        <div id="counterBox" class="hidden"></div>
+        <div class="q-list" id="qList"></div>
+      </div>
+      <div class="label" style="margin-top:16px">確認項目のカバレッジ</div>
+      <div id="covBar"></div>
+      <div class="label" style="margin-top:16px">確認項目の充足（✓ 確認済み / △ 一部 / — 未確認）</div>
+      <div class="check-panel" id="checkBody"><div class="check-note">判定が始まると、ここに埋まり具合が出ます</div></div>
+      <div id="pbWrap" class="hidden">
+        <div class="panel-head" style="margin-top:18px;margin-bottom:0">
+          <div class="label" style="margin:0">面接プレイブック（候補者タイプ・併願先・魅力づけ。判定で該当した分岐が点灯します）</div>
+          <span class="meta" id="pbMeta"></span>
+        </div>
+        <div class="pb-tabs" id="pbTabs">
+          <button class="active" data-pb="types">候補者タイプ</button>
+          <button data-pb="rivals">併願先</button>
+          <button data-pb="attract">魅力づけの弾</button>
+        </div>
+        <div class="pb-grid" id="pbBody"></div>
+      </div>
+      <div id="skillWrap" class="hidden">
+        <div class="panel-head" style="margin-top:18px;margin-bottom:0">
+          <div class="label" style="margin:0">ロープレチェック（進め方の実践度・約25秒ごとに更新）</div>
+          <span class="meta" id="skillMeta"></span>
+        </div>
+        <div class="skill-list" id="skillBody"><div class="check-note">開始すると、ここに進め方のチェックが出ます</div></div>
+      </div>
+      <div id="knowWrap">
+        <div class="panel-head" style="margin-top:18px;margin-bottom:0">
+          <div class="label" style="margin:0">ナレッジアシスト（登場エンティティ・VoC・関連知見）</div>
+          <span class="meta" id="knowMeta">約30秒ごとに更新</span>
+        </div>
+        <div class="ent-chips" id="entChips"></div>
+        <div id="vocList"></div>
+        <div id="kbList"></div>
+      </div>
+      <div class="cue-log" id="cueLog" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="memoModeHint" style="margin-top:16px">
+    <div class="label">構造化要約</div>
+    <p class="note" style="margin-top:6px">構造化要約（10分ごとの議事メモ）は、社内会議テンプレートを選ぶと使えます。上のテンプレート選択で「社内会議（定例・打ち合わせ）」か、それを元に保存したテンプレートを選んでください。</p>
+  </div>
+  <div class="card hidden" id="memoCard" style="margin-top:16px">
+    <div class="panel-head">
+      <div class="label" style="margin:0">構造化メモ（10分ごとに自動更新・そのままコピペできます）</div>
+      <span class="meta" id="memoMeta">開始すると、ここにメモが育っていきます</span>
+      <button class="btn-ghost" id="memoNowBtn" style="padding:5px 12px;font-size:12px">今までの議論をまとめる</button>
+      <button class="btn-ghost" id="memoEditBtn" style="padding:5px 12px;font-size:12px">編集</button>
+      <button class="btn-ghost hidden" id="memoCancelBtn" style="padding:5px 12px;font-size:12px">キャンセル</button>
+      <button class="btn-ghost" id="memoCopyBtn" style="padding:5px 12px;font-size:12px">コピー</button>
+      <button class="btn-ghost" id="memoDlBtn" style="padding:5px 12px;font-size:12px">.md保存</button>
+    </div>
+    <div id="memoBody" style="font-size:13.5px;line-height:1.8;background:#FAFAFB;border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;max-height:440px;overflow-y:auto">（まだメモはありません）</div>
+  </div>
+
+  <div class="card" id="histCard" style="margin-top:16px">
+    <div class="panel-head">
+      <div class="label" style="margin:0">過去のセッション（このブラウザ内に保存・音声は含みません）</div>
+      <span class="meta" id="histMeta"></span>
+    </div>
+    <div id="histList"></div>
+  </div>
+</main>
+
+<footer>本ページは体験デモです。実プロダクトの画面・処理とは異なります。音声と書き起こしは画面を閉じると破棄されます。判定は選択したテンプレート（ゴール・確認項目）に基づく汎用ロジックで、実案件データに基づくものではありません。</footer>
+
+<style>
+.branch-chip{display:inline-block;margin:2px 0 8px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:#EFE6FD;color:#5B12C9;letter-spacing:.02em}
+.pb-tabs{display:flex;gap:6px;margin:10px 0 8px}
+.pb-tabs button{padding:5px 12px;font-size:12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--sub);cursor:pointer}
+.pb-tabs button.active{background:#7724EB;border-color:#7724EB;color:#fff}
+.pb-grid{display:grid;grid-template-columns:250px 1fr;gap:12px;align-items:start}
+.pb-list{display:flex;flex-direction:column;gap:4px;max-height:520px;overflow-y:auto;padding-right:2px}
+.pb-item{border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;background:#fff;cursor:pointer;font-size:12.5px;line-height:1.45}
+.pb-item:hover{border-color:#C9B3F2}
+.pb-item .nm{font-weight:700;color:var(--ink)}
+.pb-item .hint{font-size:11px;color:var(--sub);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pb-item.sel{border-color:#7724EB;background:#F7F2FF}
+.pb-item.on{box-shadow:inset 3px 0 0 #7724EB}
+.pb-item .live{display:inline-block;margin-left:6px;font-size:10px;font-weight:700;color:#5B12C9;background:#EFE6FD;border-radius:999px;padding:0 6px;vertical-align:middle}
+.pb-detail{border:1px solid var(--line);border-radius:var(--radius);background:#fff;padding:14px 16px;min-height:200px}
+.pb-detail .pb-title{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.pb-cols{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:14px}
+.pb-col .pb-sec{font-size:11px;color:var(--sub);letter-spacing:.06em;margin:0 0 6px;font-weight:600}
+.pb-col ul{margin:0;padding:0 0 0 16px;font-size:12.5px;line-height:1.6}
+.pb-col li{margin:0 0 4px}
+.pb-col .say{list-style:none;padding:0}
+.pb-col .say li{border-left:3px solid #7724EB;padding:2px 0 2px 10px;margin:0 0 7px;color:var(--ink);background:#FAF7FF}
+.pb-detail p.say-p{font-size:13px;line-height:1.7;margin:0;border-left:3px solid #7724EB;padding:4px 0 4px 12px;background:#FAF7FF;white-space:pre-line}
+@media (max-width:900px){.pb-grid{grid-template-columns:1fr}.pb-cols{grid-template-columns:1fr}.pb-list{max-height:220px}}
+</style>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+// 画面モード: 通常=デモ画面（技術情報を出さない）、#setup=設定タブ（キー・モデル等はこちら）
+const VIEW = location.hash==="#setup" ? "setup" : "demo";
+
+// ---------- ヒアリングテンプレート（標準＋自作。自作はブラウザ内に保存） ----------
+const TPL_STORE="navi-generic-templates";
+// >>> INTERVIEW_TPL
+// 社長面接テンプレート（2026-09-09）。日本M&Aセンター 竹内社長の最終面接 84本＋総評60本の分析から作成した型。
+// 引用は書き起こしの実発言（候補者名・社名・個別年収は不使用）。正本: outputs/2026-09-09/takeuchi-interview-playbook/
+// say / 幕別の言い回しは言い回し辞典（phrasebook.md）の実発言から差し込み済み（splice_say.mjs）
+const INTERVIEW_TPL={
+ "name": "社長面接（中途・最終面接）",
+ "mode": "interview",
+ "goal": "候補者の信念形成・覚悟・「なぜ当社か」の本気度を見極めて面接内で心証を固める。合格なら魅力づけと処遇（評点・年収・配属候補）・次のアクション（現場長との面談・入社時期）まで伝え、迷えば「現場長が預かるか」に委ねる。保留は期間を空けての再挑戦、見送りはその人の適所を一言添える",
+ "advice": "9幕の流れ: 掴み（当日の行動の雑談）→生い立ち（出身・幼少期・兄弟・両親の職業・部活・受験・就活の軸）→現職の実績を数字と順位で→転職の必然（トリガーの時期・現職残留を勧める押し返し・家族は何と）→併願と「なぜ当社か」→覚悟と将来（振り切った経験・40歳の姿）→同席者に振る→逆質問＝魅力づけ→クロージング。履歴書を上から順に指差しで進め、飛ばさない\n前半は候補者に7割話させ、社長は短い質問を連打する。逆質問以降は社長が7割語ってよい（魅力づけの本体）。合格者ほど面接は長い\n実績は必ず「何名中何位・どの期間」まで分解する。「1位を取れなかった要因は？」「ラッキーと実力の比率は？」「あんまりすごくないんでしょうね」とあえて低く見て反論を引き出す\n転職のトリガーは時期を特定する（「エージェントに登録したのはいつ？なんで登録したの？」）。蓄積された不満と引き金を分けて確認し、動機の一貫性を時系列で検証する\n「転職しなくていいのでは」「現職でも叶うのでは」「コンフォートゾーンの何が悪い？」を最大4回押し返し、志望動機の耐久性を測る。同じ抽象語を繰り返すなら覚悟不足\n家族は必ず聞く（「奥さんは何と？」「東京だった場合は？」「ご両親には相談した？」）。家族の合意はハードワークに耐える前提条件。「上司とか会社もそうですけど、家族ですよ」\n併願は正面から聞く。「ざっくり各社の違いを言えます？」→「どこでやりたい？なぜ？」→「僕の立場だったら、あなたをどう思ってると思います？」→「その対策は？」→「2番志望なら撤回でOK」→もう一度「なんでセンターなんですか？」。当社固有の理由（実績・育成の一般論でないもの）が出るまで語り直させる\n同業M&A経験者は減点スタート。「なんでセンターに来るんですか、センターで何をしたいんですか」だけを繰り返し、処遇なら「他の同業に行けばいい」、正しいM&Aなら「現職でやればいい」とぶつける。40歳の姿に会社が出てこなければ独立志向。語れなければ保留＋宿題（1〜2ヶ月空けて再挑戦、統合報告書・書籍の読み込み）。情報持ち込み禁止と口外禁止を念押し\n覚悟は「振り切った経験（失敗でもいい）」「40歳になったら何してます？」「ご縁がなければ？」「いくらだったらうちに来ます？」で確認。年収ダウンを自ら受け入れる姿勢は加点（「一旦かがむのは悪くない」）\n候補者からの質問には社長として本音で答え、自分の失敗談（入社半年売上ゼロ→上司交代）と会社の哲学（富士山のプライド・着手金論・全国マッチング・ストーリーを売る・成功はマッチング）で魅力づけする。語った直後に「楽しかったですか、今の話」で価値観を確認する\n判断の三本柱は「当社でなければならない理由」「覚悟・バイタリティ」「思考の深さ・軸」。能力や人柄の高評価は見送りを覆さない。準備不足（理念を言えない・M&Aの略を言えない）は素直に認めれば不問\nクロージングは「結論、採用です」→「何がいいかというと」を人物評で→不安点も同時に→年収（制度説明→希望の根拠→提示）→配属（チャネル希望・上司相性）→入社日（四半期）→「飛ぶ鳥跡を濁さず。現職に最後の1秒まで尽くす」→併願先へのエール。合否は候補者が語り切った後にのみ出す",
+ "skillChecks": [
+  "掴み: 当日の行動（起床・交通・食事・有給）や家族の送り出しの雑談で緊張をほぐしてから入ったか",
+  "生い立ちを時系列で: 出身・幼少期・兄弟・両親の職業・部活・受験・就活の軸まで履歴書の順に聞けたか",
+  "数字と順位: 実績を「何名中何位・どの期間」まで分解し、1位でない要因や実力とラッキーの比率を聞いたか",
+  "トリガーの特定: 転職活動を始めた時期（登録はいつ・なぜ）と引き金を特定したか",
+  "押し返し: 「転職しなくていいのでは」「現職でも叶うのでは」で志望動機の耐久性を試したか",
+  "家族の合意: 配偶者・両親が転職とハードワーク・転居に何と言っているかを確認したか",
+  "併願の本気度: 併願先の違いを語らせ、「僕の立場なら？」「対策は？」で本気度を試したか（併願がある場合のみ判定）",
+  "なぜ当社か: 実績・育成の一般論でない当社固有の理由を、候補者自身の言葉で語らせたか",
+  "覚悟と将来: 振り切った経験・40歳の姿・ご縁がなければ・年収を下げてでも、で覚悟を確認したか",
+  "魅力づけ: 社長自身の失敗談と会社の哲学（歴史・富士山・着手金・全国マッチング・成功はマッチング）を語ったか（逆質問以降で判定）",
+  "クロージング: 合否の心証・年収・配属候補・入社時期・次のアクションを伝え、飛ぶ鳥跡を濁さずを添えたか（終盤のみ判定）",
+  "発話比率: 前半は候補者7:面接官3を保てているか（逆質問以降は面接官が語ってよい。実測値を参考に直近の傾向で判定し直す）"
+ ],
+ "playbook": {
+  "types": [
+   {
+    "name": "同業M&A仲介からの応募",
+    "signals": [
+     "現職がM&A仲介・スモールM&A・ブティック",
+     "転職理由が「もっと大きいディールを」「評価されたい」「誠実なM&Aを」",
+     "M&Aの知識はある"
+    ],
+    "do": [
+     "「なぜ当社でなければならないか」を一点集中で問う（5回繰り返してよい）",
+     "処遇が本音なら「だったら他の同業に行けばいい」、正しいM&Aなら「現職でやればいい」とぶつける",
+     "「40歳になったら何してます？」で独立志向を確認",
+     "語れなければ保留。1〜2ヶ月空けて再挑戦、統合報告書・書籍の読み込みを宿題に",
+     "情報持ち込み禁止・口外禁止を念押し"
+    ],
+    "say": [
+     "まず、M&Aの経験者はうち取らないです。大前提として。M&Aの未経験者を取ります。",
+     "現職さんから絶対に情報持ってこない。何があっても。会社対会社っていう考え方もあります。",
+     "法人看板で取ったということである以上は法人で取っているんです。",
+     "○○さんがなんでセンターで働かないといけないのか僕にはよくわからないです",
+     "だってM&Aを知ってるわけですからわざわざ移りさせないと思いますよどこでも一緒ですよM&Aは",
+     "3年後5年後独立しますね っていう人は採用してないですよ",
+     "他社の着手金無料とかを経験された人はうちでは通じないですよ、もう本当に。",
+     "うちの会社の唾を吐いていった人間とか、情報を抜いていった人間って大体みんな失敗してます",
+     "僕はシンプルで、なんでセンターに来るんですかと、センターで何したいんですかっていうことだけを聞くだけですので"
+    ]
+   },
+   {
+    "name": "同業を複数併願（どこでもいい）",
+    "signals": [
+     "同日に同業の最終面接を複数入れている",
+     "各社の違いは言えるが「御社が第一志望」の根拠が実績・育成の一般論",
+     "社長が出てくると知りながら準備の痕跡がない"
+    ],
+    "do": [
+     "「ざっくり各社の違いを言えます？」で理解を語らせる",
+     "「どこでやりたい？それは何で？」→「実績があるからってこと？2点目は？」",
+     "立場を入れ替える: 「僕の立場だったら、あなたをどう思ってると思います？」→「その対策は？」→「なぁと思ってます／立ててきました、どっち？」",
+     "逃げ道を与える: 「2番志望なら撤回でOK」→「じゃあ1番はどこで、なぜそこか」",
+     "もう一度「なんでセンターなんですか？」。当社固有の理由が出なければ見送り要因",
+     "合格時は併願先を貶さずエール"
+    ],
+    "say": [
+     "これ4社をそれぞれ受けられている理由って何かあるんですか?",
+     "日本M&Aセンター、これざっくり違い言えます?",
+     "その上で、なんでセンターなんですか?",
+     "○○さんが私の立場だった場合、何社か同業を受けられてます。私自身どう思ってると思います?",
+     "今回ご縁がなかった場合はどうされるんですか",
+     "上辺だけでその場をごまかそうとしてしまう これはね僕はM&Aプレイヤーとして致命傷だと思いますよ",
+     "日本M&Aセンターと○○で内定出たらどっちでいきますか?",
+     "僕は他社を意識する必要性もなくて、全くもって。全てが差分があるので。",
+     "これ、ざっくり違い言えます？"
+    ]
+   },
+   {
+    "name": "経歴が綺麗すぎる（大手金融・商社・コンサル・官僚）",
+    "signals": [
+     "メガバンク・証券・信託・総合商社・戦略コンサル・官庁出身",
+     "現年収が高い、転職理由が薄い",
+     "「自分の力で現場の仕事をやりたい」"
+    ],
+    "do": [
+     "「わざわざ当社に来る人は少数派」と自覚を促し、真意を聞く",
+     "年収ダウンを受け入れるかで覚悟を測る（自ら下げる姿勢は加点）",
+     "反骨精神など内在的な動機（父との関係・挫折）を探す",
+     "労務環境のギャップ（コールドコール・泥臭さ・24時間365日）を先回りで宣言",
+     "コンサル出身には「うちで苦労しがち」「1000万からそんなに上がらない」と期待値調整",
+     "35歳前後は「デッドライン」と正直に言い、現場長との再面接に委ねる"
+    ],
+    "say": [
+     "現職のヘッドを目指されてもいいんじゃないんですかねって思うわけですよね",
+     "逆にそれがないであるならば現職のブランドでやっぱり取れてらっしゃる方なのかなっていう印象",
+     "M&A仲介業界って何って本当ローテクでこんなどさ回り的なこと例えばコールドコールも含めて",
+     "幻滅してしまう部分もあると思いますよ今やられてる仕事とは全くもって真逆ですよ",
+     "逆に言うとこの5年無駄になるかもしれないですよ",
+     "正直○○さんのような人材は僕成功しないと思います",
+     "コンフォートゾーンは何が悪いんですか?逆にそれはそれで安定的に年収もとってらっしゃるわけですし",
+     "省庁だから鼻につくわけですよね。",
+     "キャリアとしては綺麗ですけどね。それを全部捨て去ってまで努力頑張らなくていいんじゃないの？"
+    ]
+   },
+   {
+    "name": "転職回数が多い・短期離職・退職済み",
+    "signals": [
+     "20代で3〜4社目、半年〜1年で転職",
+     "内定前にすでに退職している",
+     "辞めた理由が環境・上司・エージェントのせい"
+    ],
+    "do": [
+     "各社の辞めた理由を1社ずつ時系列で聞く",
+     "「早くないですか」「戻るならどうする？」「多責では？」",
+     "退職済みは「うがって見られる」と懸念を明示した上で必要性を聞く",
+     "定着性を総評の申し送りに"
+    ],
+    "say": [
+     "一番良くないのが、転職して転職失敗だと思って1年でまた転職することですよ",
+     "やっぱり最低、僕10年はいてほしいんですよ。",
+     "30代で2社、次は3社目ということですので絶対に失敗できないなあという思いを持っていますし",
+     "今のこの記憶が全部ある前提の上で一社目どこでやりますか",
+     "決して辞めてから転職活動することが 僕はダメとは思わないんですが逆にうがって見られる部分もありますよね",
+     "奥さんのご両親怒るんじゃないですか? 怒りますよね。",
+     "人間とはやっぱり1個に閉じるってのはすごく重要だと思ってるんです。1個に閉じることで味が出てくる。",
+     "挑戦はしたけど半年で諦めるのも早くないですか?",
+     "一般的には在職しながら転職活動というのが一般論じゃないですか。それが一般論であるが故に、うがって見られる部分もありますよね。そこが知りたいってことですね"
+    ]
+   },
+   {
+    "name": "商品力の強い会社で成果を出してきた",
+    "signals": [
+     "商材・ブランド・市場の追い風で売れている",
+     "志望理由が「限界突破」「成長」「自分の価値を上げたい」の一般論",
+     "M&Aを知ったのが最近"
+    ],
+    "do": [
+     "商材なしで売れるかを問う（「その商品力がなくなったら？」）",
+     "M&Aを知った時期と研究の深さを聞く",
+     "「一足飛びでは？」「そんなに高めなくてもいい」で覚悟を試す",
+     "思考の深さで判定。原体験は当事者に聞きに行った痕跡があるか"
+    ],
+    "say": [
+     "だからある程度商品頼みで納入できるんじゃないのかって、すごい失礼な言い方で恐縮なんですけど",
+     "それはどうですか?否めないですか?",
+     "この成功体験、商材の売り方、これ多分M&Aで全く通用しないと思います。",
+     "そこを混同した成功体験を 全部捨てた方がいいですよ",
+     "M&Aって何が違うと思います? 商品がないっていう、商品が変動するってことです。",
+     "プロサッカー選手がいきなりプロ野球選手のメジャーリーグに行くんだと思っていかないと",
+     "水売ってるビジネスじゃないので",
+     "これ差別化ってあるんですか、他の営業と。",
+     "それをもってM&Aに行くのは一足飛びじゃないかなと思っちゃうんですよ。それでもM&Aなんだっていうのは何でなんですかね"
+    ]
+   },
+   {
+    "name": "若手・第二新卒（社会人1〜3年）",
+    "signals": [
+     "実績は小さいが伸びしろ",
+     "就活の軸が語れる／語れない",
+     "3〜5年続ける根拠が薄い"
+    ],
+    "do": [
+     "幼少期・学業・就活の軸を厚く聞く。就活で何社落ちたか",
+     "「3〜5年続ける根拠」「軸」を確認",
+     "軸がなければ「今は早い。現職で3年、トップ10%の実績を積んで再挑戦」",
+     "年齢補正でSが付きやすい。厳しい上司の下へ"
+    ],
+    "say": [
+     "このまま現職さんで続けてやられても、僕も、もちろん業界最大手ってのありますけど、ちょっと早くないですか?",
+     "それで半年前にM&A業界を知ってこっちだって早くないです?",
+     "いや、もったいないですよ、○○さん。僕が○○さんのお兄さんだったら、いや、まだやめない方がいいよって。",
+     "もうちょっと脂に乗った方がいいと思いますけどね",
+     "この結果を3年間上げられたら もう一度弊社に来ていただいたらなと。",
+     "新卒3年目で○○万はちょっと多いかなっていう部分なので他言無用でお願いします",
+     "本当にこの年齢で採用するってなかなかないです、第二新卒ということで。",
+     "若さと新人っていうのは一番有利アドバンテージを持ってるのは時間なので。",
+     "就職活動の軸ってありました？"
+    ]
+   },
+   {
+    "name": "上位だがトップでない（努力型）",
+    "signals": [
+     "行動量トップなのに1位でない",
+     "400人中5〜10位が続く",
+     "派手さがない"
+    ],
+    "do": [
+     "1位でない要因の自己分析を評価する",
+     "器用さの有無、上位者との差分を本人に言語化させる",
+     "育成の時間軸を長めに。総評で「時間はかかる」と申し送り"
+    ],
+    "say": [
+     "確かに1位じゃないですもんね。1位取れたことないんですね",
+     "1位を取る人とかいう人も大体いつもトップ3に入ってますよ。それと、○○さんの違いは何だと思います?",
+     "なんで1位になれなかったと思います?",
+     "逆にそれが明確な因数分解であるならば、○○さんはそこに向かって努力をすればトップが取れるということですよね。",
+     "なんでトップを取らないんですか?",
+     "○○さん有名人ですか?",
+     "○○さん、結果出せると思います。ただ、時間かかると思います。",
+     "半分はやっぱり、運っていうのがあると思いますよ。でも、かといって半分は実力でしょうね。",
+     "それでも連続でトップ取れないのは何でなんですか？"
+    ]
+   },
+   {
+    "name": "家庭事情あり（配偶者の仕事・新生児・介護・地方固定）",
+    "signals": [
+     "配偶者のキャリアを支えたい、転居不可",
+     "勤務地が家庭事情で固定",
+     "家族に相談していない"
+    ],
+    "do": [
+     "ハードワークとの両立可否を正面から聞く。価値観は否定しない",
+     "「配偶者が動く選択肢はないか」を一度は聞く",
+     "地方希望・介護・結婚は配属と入社時期で吸収（原則通す）",
+     "家族の合意が取れていなければ配偶者の反応を必ず確認"
+    ],
+    "say": [
+     "出て行く時、奥さん何て言われてました?",
+     "奥様にはもう今回転職活動しているのは相談されているんですか?",
+     "これだと奥さんから怒られないでしょ",
+     "奥様はお金じゃなくて、やっぱり健康ですよね。健康っていうのは、○○さんが楽しそうに仕事をしてくれていること。",
+     "奥さんの堪忍袋もね、2年も3年も5年もね、あんたどれだけやってるのってことになるとね",
+     "僕は○○さんは地元だけにずっと眠っている人材じゃないと思いますよ。",
+     "子供も0歳と2歳で東京来いって無茶な話じゃないでしょう。",
+     "大阪でも名古屋でも東京でもいいです。どこでも。それを自分で選んでくださいよ、本当に。",
+     "奥さんは転職活動については何と言われてるんですか？"
+    ]
+   },
+   {
+    "name": "苦労人・ハングリー（母子家庭・転勤族・体育会）",
+    "signals": [
+     "幼少期の苦労、転校の多さ、奨学金",
+     "週6.5日稼働などの行動量",
+     "頑固さ・人を見下す発言が混ざる"
+    ],
+    "do": [
+     "信念形成の背景（家族・出来事）を厚く聞き、線でつなぐ",
+     "視座の低さ・他者を下げる言い回しがないか観察",
+     "頑固さがあれば「振り子を振り切らせる」上司を指名",
+     "変化への耐性は採用理由に使える"
+    ],
+    "say": [
+     "そう考えたら、○○さんお金使わせましたね、ご実家にね",
+     "ちゃんとお母さんに感謝しないといけないですね。",
+     "やっぱ昭和の方素敵ですよね。",
+     "ご両親は息子のためにはやむなしいぐらいの感じですか? それともこんなものは余裕だろう ぐらいの感じだったんですか?",
+     "完全に野球ですもんねオーラがね今の受け答えも含めて野球ですね",
+     "へぇー自分の山の登り方と輝き方がわかってるんですね。",
+     "やっぱり高みを目指すといいことですね。",
+     "苦しいことがいっぱいあればあるほどラッキーですから。おー来た来た来たって言って",
+     "お母さんに苦労をかけないと、頑張ってきた感じ？"
+    ]
+   },
+   {
+    "name": "非営業・専門職（経理・IB・コンサル・士業）",
+    "signals": [
+     "コミュニケーションより専門性",
+     "資格を前面にアピール",
+     "営業経験がない、または薄い"
+    ],
+    "do": [
+     "専門性の柱を聞き、第二創業（IBカバレッジ・ミドルキャップ）や資格を活かすチャネルに接続",
+     "「資格は自分の要素の一つ」と言い切れるか",
+     "営業耐性・理不尽への受容を確認。営業経験ゼロ×やむなく転職は見送り",
+     "立ち上げ要員は評点A-でも採用、サポート前提を申し送り"
+    ],
+    "say": [
+     "だから別に決してCPA持っているからということは僕はアドバンテージだと思っていなくて",
+     "あとは別に財務じゃなくて気持ちですからねM&Aは",
+     "マーケという、いわゆる横軸をバーッてやってきた人は次、やっぱ縦軸やりたくなるんですよ。",
+     "それがいきなりコンサルに横軸になったわけですよね、縦軸やってたのが",
+     "延長線上です。あくまでも。やっぱり一足跳びって絶対良くないですから、ビジネス上。",
+     "なかなか一気に一足飛びいってるんじゃないかなと思っちゃうんですよ。",
+     "お父さん税務事務所やっててっていうのはね 気になるからね それがやっぱりこう 掛け合わせって重要ですからね",
+     "じゃあ会計でいきましょうとっても営業やりやすいですよね",
+     "やっぱりターゲティングを間違わないことと、日本M&Aセンターらしさを出すこと。この2点だと思っています"
+    ]
+   },
+   {
+    "name": "女性候補者",
+    "signals": [
+     "業界の男性比率やロールモデルを気にする",
+     "併願先の女性活躍を判断軸にしている"
+    ],
+    "do": [
+     "質問構成は変えない",
+     "配属で「女性プレイヤーがいる部署」を候補に。上司との相性を入念に",
+     "ライフプランは本人が触れたときだけ"
+    ],
+    "say": [
+     "下駄を履かせることが女性に対して出すことではないのででもM&A業界はまだ古いですもんね",
+     "結婚して子供生まれるとやっぱり女性はさらに強くなっていきますからね",
+     "女性は約40名。去年初めて女性プレーヤーで年間1億の達成者が出ました。ガラスの天井を一個一個彼女たちが壊していってもらっている最中です",
+     "とにかく女性のプレイヤーがいるところで配属をしたいなと"
+    ]
+   }
+  ],
+  "rivals": [
+   {
+    "name": "同業大手（M&Aキャピタルパートナーズ・ストライク・fundbook・レコフ等）",
+    "ask": [
+     "なぜその3社なんですか？",
+     "CPさんと当社、どちらがシンクロしますか？",
+     "ストライクさんを受けない理由は？",
+     "明日の最終面接で第一志望を聞かれたら、何とおっしゃるんですか？",
+     "僕の立場だったら、どう思ってると思います？"
+    ],
+    "say": [
+     "センター、ストライク、CPの違いをそれぞれ○○さんの中でどういう風に分析してらっしゃいますか?",
+     "ちなみに、日本M&AセンターとMACPさんの違いは何かあるんですか?",
+     "稼ぎたい人はMACPに行けばいいと思います。そこに僕は勝負する気はないです。",
+     "王者とか分業制とかなんかそれは多分2番手3番手4番手業界が言ってるだけの話で",
+     "説得もしないし、年収勝負もしないし、他社をディスることも全くもってないですし",
+     "他者の否定は自社の否定ですので、我々からすると。",
+     "キャピタルパートナーさんに入った5年後とセンターに入った後の5年後ってどんなイメージがありますか?",
+     "MACPさんともしっかりしゃべってもらって、ここで我々はどうのこうの言うことでもないですし",
+     "全くもって異質の会社です。この業界を作り上げてきたっていうのがまず一つのプライド。ゼロを一にした会社"
+    ]
+   },
+   {
+    "name": "新興・着手金ゼロ系（ロイヤルアドバイザリー・ジャパンM&Aソリューション等）",
+    "ask": [
+     "他社は着手金ゼロを謳っていますが、どう思われます？",
+     "教育体制はどう比較されました？"
+    ],
+    "say": [
+     "まずそもそも着手金を無料にする意味がわからないです",
+     "着手金をもらえない企業というのはお客様を軽視している証拠",
+     "無料の対価ほど怖いものはない",
+     "箱入り娘を何でもかんでもいいから、行っておいでよっていうことで売りに行くのか",
+     "だって唯一着手金を取ってるんですよ。お客様からすると怖いじゃないですか。でも僕は当たり前だと思ってます。",
+     "業界の成約率の平均が10%ちょっとぐらいです。当社は今45%ぐらい",
+     "今やっぱ着手金を取っていることが差別化になっている。",
+     "ロイヤルに行かれて、そのまま半年とかで転職とかって、もうセンターで絶対成功するしかないんですよ。",
+     "唯一、他社が着手金を無料にする理由は一つだけで、出ないとお客様から契約を結んでもらえないから。着手金をもらえない企業というのはお客様を軽視している証拠"
+    ]
+   },
+   {
+    "name": "特化型・地域密着ブティック（介護・医療・IT特化、地方密着）",
+    "ask": [
+     "特化のメリットと、スケールの限界はどう見ていますか？",
+     "地域密着なら、なぜ東京に来られたんですか？",
+     "M&Aやるんでしたら東京とかのいいところってないんです？"
+    ],
+    "say": [
+     "やっぱり一言で言うならば全国のマッチング力が強い。もうそれに尽きるんじゃないかな",
+     "だいたい佐賀県の社長さんはまず佐賀県内の案件には持っていかないでくれています",
+     "我々のマッチングはやっぱり異業種と隣県あるいは遠方の先からのマッチングがスタートする",
+     "大切なことはこの1社のお客様に対して1社でも多くのオファーをかけてあげること。それがフェアバリューです",
+     "M&Aブティックも 立ち上げられた人がそのままM&Aで譲渡されるケースも増えてきてるんですね",
+     "金融は完全に金融特化ですよ。会計は会計特化。ダイレクトもダイレクト特化。そんな営業スタンスです。",
+     "一言で言うならば全国のマッチング力が強い。それに尽きる",
+     "一般のブティックが普通にマッチングしたら都心とか福岡とか広島とか大阪の企業に偏ってしまう。でも全国から会計事務所を含めてネットワークがありますので、いろんな角度からのマッチングが強みとして出た結果",
+     "佐賀県の社長さんはまず佐賀県内の案件には持っていかないでくれと。知らない人に見てもらうことの方がいい、これは人間の心理ですね"
+    ]
+   },
+   {
+    "name": "コンサル・投資銀行・金融残留",
+    "ask": [
+     "縦軸（事業会社）と横軸（コンサル）の違いはどう感じました？",
+     "専門性の柱は何ですか？",
+     "現職の安心安全を全部捨ててまで、頑張らなくていいんじゃないの？"
+    ],
+    "say": [
+     "だったら別に今の現職に残られるのもいいと思うんですよね自分自身の問題なので",
+     "しっかり現職の食品メーカーの役員とかそこまで上がっていけるキャリアでいらっしゃるんじゃないかなと思いますけどね。",
+     "M&A仲介業界って何って本当ローテクでこんなどさ回り的なこと例えばコールドコールも含めて",
+     "プロジェクトどころか、あなたが間に入って全部やりなさいですから",
+     "弊社の営業本部の年間バジェットは約400億です。そのうち大体1人当たりでマックスで持っている年間予算が1.5億です",
+     "M&Aって最高峰ですから",
+     "会社を動かすのはエクイティだと。やっぱりM&Aだなというのがシンプル",
+     "自分がプロジェクトとして与えられるものであったとしても、僕はその一部分を作っているということに過ぎない",
+     "M&Aは人物金情報すべてを自分で動かすんですよ。ビジネスの最高位だと思ってますから。かといって永遠の黒子でもある"
+    ]
+   },
+   {
+    "name": "現職残留・当社一本",
+    "ask": [
+     "それなら現職でやればいいんじゃないですか？",
+     "今回ご縁がなければ、どうされます？",
+     "現職でその不満は解消できないんですか？役員と相談は？"
+    ],
+    "say": [
+     "逆に言うとセンターが第一志望ですか?",
+     "そうするとセンターに最終面接一発だみたいな感じですね",
+     "何があれば現職に残ってたんですか?",
+     "どうやったら○○さんが現職に残るのかなと思って",
+     "本当にここだって思うものがない限り、別にわざわざ転職する必要性もないですね。",
+     "しっかり受けてもらって。しっかりテーブルに広げてもらって。",
+     "だったら今全部の面接行きませんね、そんな小さいことは僕は言わないです",
+     "その上で最終最後日本M&Aセンターという会社を選ぶということであるならば絶対に失敗しないですよ",
+     "わざわざM&A業界の門を叩かれる必要性はないんじゃないかな"
+    ]
+   }
+  ],
+  "attract": [
+   {
+    "topic": "歴史と最大手",
+    "say": "M&Aの『え』の字も全く持っている業界がない時から、35年の歴史を積み重ねてやってきた会社が日本M&Aセンターです。業界を牽引していくリーダーとしてモアにならないといけないというプライドを1200人全社員が持っている"
+   },
+   {
+    "topic": "富士山のプライド",
+    "say": "日本人に一番高い山はどこですかって聞くと富士山って答えられますけど、2番目の山は絶対誰も答えられない。だから我々富士山ですから、富士山のプライド持ってますよ"
+   },
+   {
+    "topic": "ストーリーを売る",
+    "say": "我々ってM&Aを売ってるんではなくてストーリーを売りに行ってますんで。ウォームハートという人間力と、クールヘッドという冷静さ"
+   },
+   {
+    "topic": "着手金の哲学",
+    "say": "会社って箱入り娘なんです。一つ一つ丁寧に扱いながら思いを組んでやっていく。着手金をもらえない企業というのはお客様を軽視している証拠。我々は100仕入れたら100成約すべきだと捉えています"
+   },
+   {
+    "topic": "全国のマッチング力",
+    "say": "全国から会計事務所・地銀を含めてネットワークがありますので、異業種・異地域の成約が一番多いのはその結果。それ自身がデータなので"
+   },
+   {
+    "topic": "成功はマッチング（社長の失敗談）",
+    "say": "入社して半年間売上ゼロ。7ヶ月目に上司が変わって、学習塾の売り案件を北から南まで全部アプローチかけていこうよと、僕のアクションを一つに定めてくれた。だから2月から全ての最終面接に僕が入って、どの部長、どのGLと合うのかを自分でイメージして配置しています"
+   },
+   {
+    "topic": "活躍する人の共通点",
+    "say": "行動量とか素直さなんてもう当たり前の話で。M&Aにまみれている人が優秀。弁護士になるには5000時間、会計士は3000時間。中途はバカの壁ができちゃうんですよね、突き破れないとイコール、行動量しかない"
+   },
+   {
+    "topic": "ハードワーク＝クライアントファースト",
+    "say": "M&Aという仕事は僕ドクターと一緒だと思ってるんです。24時間365日。生涯に一度、絶対に失敗が許されない商材。だからこそカレンダーに『こと』を入れて、ワークもライフも150%やる"
+   },
+   {
+    "topic": "年収と評価の制度",
+    "say": "Aさんの固定が800、Bさんが1000でも、同じ2億の実績なら総年収は同じになる制度。発射台は違えど同じ実績なら同じ年収。とにかく固定給を上げに行く会社で、インセンティブ料率が低いのはお金を目的とする社員を入れないから"
+   },
+   {
+    "topic": "第二創業期・海外",
+    "say": "僕も2年前に社長に就任して第二創業期。地方創生から日本創生、そして日本発の世界ナンバーワンのM&A総合企業に間違いなくなれると思ってます。営業本部の半数がASEAN駐在になる可能性もある"
+   },
+   {
+    "topic": "保証人宣言",
+    "say": "社長として僕は○○さんに対して自信を持って保証人になります。あなたは絶対成功できる。採用してから半年後もまた僕は面談して、それから1年後も"
+   },
+   {
+    "topic": "飛ぶ鳥跡を濁さず",
+    "say": "僕は飛ぶ鳥跡を濁すのが大嫌いです。人生のパイプとパイプのつなぎ目って一番重要な瞬間。現職に最後の1秒まで尽くしてください。ご縁を大切にできない人は新しい環境でも活躍できない"
+   },
+   {
+    "topic": "幕別の言い回し（実発言）",
+    "say": "掴み: 今日は有給か何かで?／出て行く時、奥さん何て言われてました?／緊張されてますか。これはまあこの水なんで、飲んでいただくと落ち着きます。／今日は何時に起床されて?\n生い立ち: 幼少期は○○さん、どんな坊主でしたか?／差し支えなければ、ご両親はどんな方でいらっしゃったんですか?／お父さんは失礼ながら、自営業とか、あるいはビジネスパーソンというか、サラリーマンというか。／就職活動の軸ってありました?\n実績: ○○さん有名人ですか?／こんな成果を出せたのは 何かあるんですか? 背景として。／これはどうなんですか?すごい実績なんですか?／これ何の対象の60名になるんですか?\n転職の必然: 今回転職を考えられている背景というのは?／転職活動のエージェント等々に登録したのはいつですか／一番最初のアクションは?どういうアクションでした?／M&A仲介のこの業界 いつ知りました?\n併願・なぜ当社か: 他にどこか受けられているところはありますか?／その上で、なんでセンターなんですか?／今回ご縁がなかった場合はどうされるんですか／これざっくり違い言えます?\n覚悟と将来: 5年後、10年後、何を目指していきます?／40歳になったら何してます?／○○さん、結果出せると思います。ただ、時間かかると思います。／焦っちゃダメだってことは言いたいんですよ本当に。\n魅力づけ: M&Aの絵の字も全く持っている業界がない時から、歴史を積み重ねてやってきた会社が日本M&Aセンターです／だから我々富士山ですから、富士山のプライド持ってますよ／遊ぶ時はアホみたいに遊んで、働く時はアホみたいに働く／僕、人ってマッチングだと思ってるんですよ。ご存知の通り。やっぱ上司と馬が合うかどうか。\n年収・配属: 年収○○万って出された背景ってあります?／○○さんいくらだったらうちに来ます?／うちは残業代が50時間見なしで入ります。／同じ実績を上げた人は同じ年収になるようにしています\n合否: これ結論内定です／わかりました。じゃあ結論採用で。／○○さん成功できると思います。はい。間違いなく。／僕が売り手の社長、買い手の社長だったら○○さんに任せてもいいかなっていう気持ちにもなったので\n接続句: これも差し支えなければ結構です／僕は本当に無知で申し訳ないんですけれども／余談ですけど。／ちょっと話戻りますね。"
+   }
+  ]
+ },
+ "checklist": "生い立ち・家族: 出身地・幼少期・兄弟・両親の職業・家庭環境（転勤族・母子家庭など信念形成の土台）\n学生時代の打ち込みと順位: 部活・受験・成績。何人中何位、第一志望だったか、親の支え\n就活の軸と現職の選択理由: なぜその会社・業界だったか、他の内定と落ちた先\n現職の実績と順位: 何名中何位・どの期間・売上規模。1位でない要因の自己分析、ラッキーと実力の比率\n転職のトリガー: いつ・何がきっかけでエージェントに登録したか（月まで特定）、蓄積と引き金\nM&Aを知った経緯と業界理解: どこで知ったか・悪い記事の認識・読んだ本・気になった案件\n家族の合意: 配偶者・両親が転職とハードワーク・転居に何と言っているか\n勤務地・チャネル希望と理由: 東京/地方、売り手/買い手、ダイレクト/ネットワーク（会計・地銀・証券・メガ）\n併願状況: どこを受けているか・進捗・各社の違いを語れるか・第一志望はどこか\nなぜ日本M&Aセンターか: 実績・歴史・育成の一般論でなく、自分の言葉で当社固有の理由を語れるか\n覚悟と将来像: 振り切った経験（失敗でもいい）・3/5/10年後・40歳の姿・独立志向の有無\n年収: 現年収の内訳・希望額の根拠・下げてでも来るか（「いくらだったらうちに来ます？」）\n顧客志向の具体例: お客様の期待を超えるために主体的に工夫した事例（総評で最頻の懸念。面接内で聞き漏らしやすい）\n候補者からの質問: 企業研究の深さ（IR・統合報告書・書籍・YouTube・セミナー）と質問の質"
+};
+// <<< INTERVIEW_TPL
+const BUILTIN_TPLS=[
+  {name:"MEDDPICC 商談ヒアリング",
+   goal:"課題と決裁構造を把握し、次回商談（デモ・提案）の日時に合意する",
+   checklist:[
+     "Metrics（成果指標）: 導入効果をどんな数字で測るか（時間・件数・金額）",
+     "Economic Buyer（決裁者）: 予算の最終決裁者は誰か",
+     "Decision Criteria（選定基準）: ツール・ベンダーを選ぶ基準は何か",
+     "Decision Process（決定プロセス）: 誰がどの順で関与し、いつまでに決まるか",
+     "Paper Process（契約手続き）: 稟議・法務・購買の手順と所要期間",
+     "Identify Pain（課題・痛み）: 何に困っていて、放置すると何が起きるか",
+     "Champion（推進者）: 社内で推進してくれる人と、その影響力",
+     "Competition（競合）: 比較検討中の他社・代替手段（現状維持を含む）"].join("\n")},
+  {name:"初回ヒアリング（汎用）",
+   goal:"訪問アポの獲得（日時の合意まで）",
+   checklist:[
+     "現在利用中のサービス・契約状況",
+     "現場で困っていること（具体例）",
+     "業務への影響（時間・コスト・リスク）",
+     "決裁ルート・関係部署",
+     "次のアクション（訪問・資料送付の日時）"].join("\n")},
+  {name:"通信架電（アポ獲得）", call:true,
+   goal:"訪問アポの獲得（日時・場所の合意まで）。反応が薄い場合は無理に引っ張らず、かけ直しの日時を約束して撤退する",
+   advice:[
+     "勝ち筋の流れ: 現状確認 → 身近な困りごとの点灯 → 業務影響への深掘り → 体制・経営の話 → 温度をつくって打診。経営論から入らず、現場の具体的な困りごとから上げていく",
+     "撤退の判断（黄色シグナル）: 生返事・そっけない相槌が続く、手が離せない様子、具体例を振っても反応が薄い、声のトーンが下がった──こうした『いまいち』の反応が出たら、無理に引っ張らず撤退する。粘って印象を悪くするより、かけ直しの約束を取って次の接点を残す方が承諾率は高い",
+     "かけ直しの提案の型: 相手の状況を受け止める（お忙しいところ失礼しました）→ 次の話題の予告を一言（◯◯の件で）→ 日時を二者択一で指定（来週火曜の午前か木曜の午後）→ 担当者名・直通の確認。「またかけます」だけで切らず、日時まで決める",
+     "相手の「特に問題ないです」には一度だけ具体例で切り返す。それでも反応が薄ければ撤退（かけ直し提案）に切り替える。困りごとが1つ点灯するだけで承諾率は大きく上がる。まだ点灯していなければ、身近な話題の具体例（請求がバラバラ、保守窓口が複数、古い機器の保守切れ等）で水を向ける",
+     "旧設備の話題は勝ち筋になりやすい: ISDN等の終了予定サービスや古い機器を使っていれば、終了時期・移行の必要性から具体的な困りごとにつなげる",
+     "離脱シグナル7類型への切り返しの型: 受けてから質問（先送りに最有効）／期限・リスク提示／要求を小さくする（多忙・時間切れに有効）／適任者への迂回（権限逃げは断りではなく決裁ルートのヒントとして扱う）／日時の再指定（「時期を改めて」に有効）。切り返しなしで引き下がると承諾に至らない",
+     "訪問提案が有効: 「お電話ではご説明しづらいので、一度お伺いして」の形は受け入れられやすい。説明が込み入ってきたら訪問打診に切り替える",
+     "受付経由の場合は「パソコンやセキュリティ・回線をご担当の方」への取り次ぎを依頼し、担当者に対して勝ち筋の流れをやり直す",
+     "クロージング: 日程は二者択一（例: 火曜か木曜の午後）で切り出し、日時・場所・同席者・持ち物を復唱して確定する"].join("\n"),
+   skillChecks:[
+     "現状確認から: 経営論や商品説明から入らず、いま使っているサービスの確認から入れたか",
+     "困りごとの点灯: 身近な具体例で水を向け、相手の困りごとを1つ以上引き出せたか",
+     "業務影響の深掘り: 困りごとを時間・コスト・リスクの実害として具体化できたか",
+     "「問題ない」への対応: 防壁で引き下がらず、具体例で切り返せたか（防壁が出た場合のみ判定）",
+     "離脱シグナルの切り返し: 拒否・多忙・先送り等に型どおり切り返せたか（シグナルが出た場合のみ判定）",
+     "撤退判断: 反応がいまいちなときに粘らず、かけ直しの日時を二者択一で取り付けたか（撤退サインが出た場合のみ判定）",
+     "クロージング: 二者択一で日程を切り出し、日時・場所を復唱して確定したか"],
+   checklist:[
+     "相手の役割: 誰と話しているか（社長・総務・情シス・受付経由の担当者）",
+     "利用中のサービス: 電話・ネット回線の現状と契約状況",
+     "旧設備の有無: ISDN等の終了予定サービス・古い機器を使っていないか",
+     "困りごと: 現場の具体的な困りごと（請求・保守・速度・機器等）",
+     "業務への影響: 時間・コスト・リスクとしての実害",
+     "体制・決裁: 決裁ルート・関係部署・キーマン",
+     "次のアクション: 訪問・資料送付などの約束",
+     "日時の確定: アポの日付・時刻・場所・同席者（撤退時はかけ直しの日時・担当者）"].join("\n")},
+  {name:"M&Aニーズインタビュー",
+   goal:"社長のビジョンと現在地のギャップを構造化して真の課題の認識を合致させ、未締結ならNDA合意と次回アポ確定まで至る",
+   advice:[
+     "アプローチの6ステップを冒頭で型どおり順番に: ①案件供給力 ②時間軸の共有 ③押し売りしない宣言 ④深い理解＝鋭角な提案 ⑤本日の位置づけ ⑥録音の同意。抜けや順番飛ばしがあれば指摘する",
+     "反論・疑問（例:「他の仲介会社からはこんなこと聞かれない」）には、受け止めてから自社スタンス（買手企業様の意向を先に伺ったうえで提案する）で切り返すよう促す",
+     "発話比率は社長8:担当2が理想。[自分]（担当側）の発話が続きすぎていたら「話しすぎ。質問で社長に返す」と注意する",
+     "話法6種を質問提案に活用: 仮説をぶつける／二段掘り／要約確認／Give（情報提供）／ポジティブ変換／Power Word（すごいですね！）",
+     "議題は「社長の物語（過去）→事業の現在地→二層（事業と個人）のビジョン→ギャップの構造化→M&A経験→足りないピースの定義」のストーリー順に自然に進める",
+     "最重要はギャップの構造化: ビジョンと現在地の差を対話の中で構造化し、真の課題について社長と認識を合致させる。ここが浅いままクロージングに進ませない",
+     "足りないピースは「機能・エリア・顧客基盤・人材・技術」に分解し、完成図のイメージを社長と共有させる",
+     "クロージング: 課題に応じてTPM（上場）の選択肢も訴求。未締結ならNDA締結の合意、「TPM上場」「IM提案」をフックに次回アポを確定させる"].join("\n"),
+   skillChecks:[
+     "アプローチ6ステップ: ①案件供給力 ②時間軸の共有 ③押し売りしない宣言 ④深い理解＝鋭角な提案 ⑤本日の位置づけ ⑥録音の同意 を型どおり・順番どおりに伝えたか",
+     "反論処理: 6ステップへの反論・疑問（例:「他の仲介会社からはこんなこと聞かれない」）に、買手企業の意向を先に伺うスタンスで適切に切り返したか",
+     "発話比率 社長8:担当2: 社長が主に話す比率になっているか（実測値を参考に、直近の傾向で判定し直す）",
+     "話法6種: 仮説をぶつける／二段掘り／要約確認／Give（情報提供）／ポジティブ変換／Power Word を適切に使えているか（直近の傾向で判定し直す）",
+     "議題のストーリー順: 社長の物語（過去）→事業の現在地→二層のビジョン→ギャップの構造化→M&A経験→ピースの定義の流れで自然に聞けているか",
+     "ギャップの構造化: ビジョンと現在地のギャップを対話の中で構造化し、真の課題について社長と認識を合致させたか",
+     "ピースの分解: 自力では届かない部分を機能・エリア・顧客基盤・人材・技術に分解し、完成図のイメージを社長と共有したか",
+     "TPM訴求: 顧客企業の課題に合わせて上場（TPM）の選択肢を訴求したか",
+     "クロージング: NDA締結の合意、または「TPM上場」「IM提案」をフックに次回アポイントを確定したか"],
+   checklist:[
+     "経歴・経緯: 前職、創業または役員就任の経緯（年齢・出身地・趣味も）",
+     "経営上の出来事: 創業／就任から現在までの主な出来事",
+     "企業理念: どのような想いで決めたか",
+     "事業内容・商流: 事業の中身とお金・モノの流れ",
+     "競合認識: 競合として認識している企業",
+     "強み: 製品・サービス・仕組みの特徴と、それが実現できる背景",
+     "弱み・課題: 製品・サービス・仕組みの課題と、その原因",
+     "ビジョン: 今後の目指すべき姿",
+     "業績: 現在の業績と目指したい業績目標（数値）",
+     "打ち手の切り分け: ビジョン到達の打ち手を自社単独でできる／できないに分解",
+     "買収実績の有無: 過去に買収した社数",
+     "買収の詳細: 主なM&A数件の詳細と成否（実績がある場合のみ）",
+     "希望業種: 希望する業種・具体的な事業内容",
+     "希望エリア: 都道府県単位",
+     "海外への関心: 有・無",
+     "希望所在国: ターゲット国すべて（海外に関心がある場合）",
+     "海外展開状況: 海外拠点の有無・展開状況や予定（海外に関心がある場合）",
+     "売上規模: 検討可能な上限・下限",
+     "投資可能額: 上限（ある場合のみ）",
+     "期待シナジー: M&Aによって期待する効果",
+     "重視ポイント: 割高でも欲しい条件／なければ取り組めない条件"].join("\n")},
+  {name:"社内会議（定例・打ち合わせ）",
+   mode:"meeting", summaryMin:10, durationMin:60,
+   goal:"会議の目的を達成し、決定事項と宿題（担当・期限）を明確にして終える",
+   checklist:[
+     "目的・ゴール: この会議で何を決めるかが共有されているか",
+     "振り返り: 前回の決定事項・宿題や直近の取り組みを振り返ったか",
+     "組織目標の確認: 議論が組織・チームの目標と結びつけて語られているか",
+     "決定事項: 何がどう決まったか",
+     "宿題・ToDo: 誰が・何を・いつまでにやるか",
+     "議題の消化: 予定していた議題を消化できているか",
+     "先送りの明確化: 決められなかったことと次回の扱い"].join("\n")},
+  INTERVIEW_TPL
+];
+// テンプレートの動作メタ（mode:"meeting"=社内会議モード。カンペは発話ごとでなくsummaryMin分ごとの要約＋残り時間提案になる）
+function tplMeta(){ return allTpls().find(x=>x.name===$("tplSel").value)||{} }
+function meetingMode(){ return tplMeta().mode==="meeting" }
+function interviewMode(){ return tplMeta().mode==="interview" }
+// 架電モード（N西）: アポ獲得確率をリアルタイム表示し、黄色シグナル＝撤退サイン（かけ直し提案）として扱う
+const CALL_TPL_NAME="通信架電（アポ獲得）";
+function callMode(){ const t=tplMeta(); return !!t.call || /架電/.test(t.name||"") }  // 面接モード（面接官視点の判定・分岐ガイド・総評ドラフト）
+function sumMs(){ return (tplMeta().summaryMin||10)*60000 }
+function durMin(){ return parseInt($("durInput").value,10)||tplMeta().durationMin||60 }
+let customTpls=[];
+try{ customTpls=JSON.parse(localStorage.getItem(TPL_STORE)||"[]")||[] }catch(_){ customTpls=[] }
+function allTpls(){ return BUILTIN_TPLS.concat(customTpls) }
+function isBuiltinTpl(name){ return BUILTIN_TPLS.some(t=>t.name===name) }
+function persistTpls(){ try{ localStorage.setItem(TPL_STORE, JSON.stringify(customTpls)) }catch(_){ } }
+function tplSelects(){ return [document.getElementById("tplSel"), document.getElementById("tplSelDemo")].filter(Boolean) }
+function renderTplSelects(keep){
+  tplSelects().forEach(sel=>{
+    const cur = keep!==undefined ? keep : sel.value;
+    sel.innerHTML="";
+    allTpls().forEach(t=>{ const o=document.createElement("option"); o.value=o.textContent=t.name; sel.appendChild(o) });
+    if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  });
+  updateTplButtons();
+}
+function updateTplButtons(){
+  const del=document.getElementById("tplDelBtn");
+  if(del) del.disabled = isBuiltinTpl(document.getElementById("tplSel").value);
+}
+function selectTemplate(name, apply){
+  const t=allTpls().find(x=>x.name===name);
+  if(!t) return;
+  tplSelects().forEach(s=>{ s.value=name });
+  if(apply!==false){
+    document.getElementById("goalInput").value=t.goal;
+    document.getElementById("checkInput").value=t.checklist;
+  }
+  const nameBox=document.getElementById("tplName");
+  if(nameBox) nameBox.value = isBuiltinTpl(name) ? "" : name;
+  // 会議モードのときだけ予定時間・アジェンダ・構造化メモを表示し、テンプレートの既定値を入れる
+  const durWrap=document.getElementById("durWrap");
+  if(durWrap){
+    durWrap.classList.toggle("hidden", t.mode!=="meeting");
+    if(t.mode==="meeting" && t.durationMin && apply!==false) document.getElementById("durInput").value=t.durationMin;
+  }
+  const aw=document.getElementById("agendaWrap");
+  if(aw) aw.classList.toggle("hidden", t.mode!=="meeting");
+  const ab=document.getElementById("apoBar");
+  if(ab) ab.classList.toggle("hidden", !(t.call || /架電/.test(t.name||"")));
+  if(document.getElementById("treeCard")) applyTab();  // 構造化要約タブの可否などをテンプレートに追従
+  if(!state.live && !state.mock) renderCoverage([]);  // 項目数表示をテンプレートに追従させる
+  updateTplButtons(); saveSettings(); broadcastConfig();
+}
+
+const VERDICTS = {
+  ok_proceed: {cls:"v-ok",   label:"このままでOK"},
+  dig_deeper: {cls:"v-dig",  label:"追加ヒアリング推奨"},
+  exit_signal:{cls:"v-exit", label:"離脱シグナル検知"},
+  wrap_up:    {cls:"v-wrap", label:"打診・クロージングへ"},
+  retreat:    {cls:"v-retreat", label:"撤退サイン：かけ直し提案"}
+};
+const VERDICTS_INTERVIEW = {
+  ok_proceed: {cls:"v-ok",   label:"このまま聞き進めてOK"},
+  dig_deeper: {cls:"v-dig",  label:"深掘り推奨"},
+  exit_signal:{cls:"v-exit", label:"懸念シグナル"},
+  wrap_up:    {cls:"v-wrap", label:"魅力づけ・クロージングへ"}
+};
+const VERDICTS_MEETING = {
+  ok_proceed: {cls:"v-ok",   label:"順調に進行"},
+  dig_deeper: {cls:"v-dig",  label:"論点を締める"},
+  exit_signal:{cls:"v-exit", label:"時間リスク"},
+  wrap_up:    {cls:"v-wrap", label:"まとめ・宿題確認へ"}
+};
+
+const state = {
+  key:null, elKey:null, live:false, mock:false, follow:true,
+  ws:null, elWs:null, elRetries:0, sttLoaded:false, stream:null, ctx:null, worklet:null,
+  utts:[], interim:"",
+  t0:0, timerId:null,
+  cueBusy:false, cuePending:false, lastCueAt:0, lastCuedCount:0, watchdogId:null, wsRetries:0,
+  sumTimerId:null, nextSumAt:0,
+  memoMd:"", memoBusy:false, memoCount:0, memoEditing:false, memoEdited:false, memoUttCount:0,
+  sessId:null, sessAt:null, cueHist:[], lastChecklist:null,
+  tab:"transcript", forceMemo:false,
+  tree:{chapters:[]}, treeSeq:{c:0,n:0}, treeBusy:false, treeTimerId:null, treeLastUttCount:0,
+  skillState:null, skillBusy:false, skillTimerId:null, skillLastUttCount:0,
+  know:{entities:[], voc:[], kb:[]}, knowBusy:false, knowTimerId:null, knowLastUttCount:0,
+  resumeData:null,
+  sigBusy:false, sigPending:false, lastSigAt:0, lastSigColor:"",
+  apoProb:null, apoHist:[],
+  softTimer:null, interimAt:0, lastSoft:null,
+  maxPeak:0, lvlId:null, lvlWarned:false,
+  chunkRec:null, chunkTimerId:null, chunkPeak:0, chunkQ:Promise.resolve(),
+  tabStream:null, tabSrcNode:null, tabSurface:"", micAnalyser:null, tabAnalyser:null,
+  mixBus:null, mixDest:null, srcLog:[], srcLvlId:null, uttStartAt:0,
+  mockTimers:[]
+};
+
+function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+function fmtT(sec){const m=Math.floor(sec/60),s=Math.floor(sec%60);return m+":"+String(s).padStart(2,"0")}
+function elapsed(){return (Date.now()-state.t0)/1000}
+function showErr(msg){const b=$("errBanner");b.textContent=msg;b.style.display="block"}
+function clearErr(){$("errBanner").style.display="none"}
+function badge(mock){return mock?'<span class="badge mock">モック応答</span>':'<span class="badge live">実行結果</span>'}
+
+// ---------- 設定 ----------
+function updateBadge(){
+  const b=$("modeBadge");
+  if(VIEW==="demo"){  // デモ画面はベンダー名を出さない
+    if(state.key){ b.className="badge live"; b.textContent="接続済み" }
+    else if(state.elKey){ b.className="badge live"; b.textContent="接続済み（書き起こしのみ）" }
+    else { b.className="badge mock"; b.textContent="モック動作" }
+    return;
+  }
+  if(state.key && state.elKey){ b.className="badge live"; b.textContent="OpenAI + ElevenLabs 接続済み" }
+  else if(state.key){ b.className="badge live"; b.textContent="OpenAI接続済み" }
+  else if(state.elKey){ b.className="badge live"; b.textContent="ElevenLabsのみ（書き起こしのみ・カンペ判定は無効）" }
+  else { b.className="badge mock"; b.textContent="モック動作（キー未設定）" }
+}
+function updateModeUI(){
+  if(state.key || state.elKey) $("modeField").classList.remove("hidden");
+  const scribe = $("modeSel").value==="scribe";
+  $("sttField").classList.toggle("hidden", scribe || !state.sttLoaded);
+}
+$("modeSel").onchange=updateModeUI;
+$("keyBtn").onclick = async ()=>{
+  const key=$("keyInput").value.trim();
+  const el=$("elKeyInput").value.trim();
+  if(!key && !el){ showErr("キーを入力してください"); return }
+  if(key && !/^[\x21-\x7E]+$/.test(key)){ showErr("OpenAIキーに全角文字などが含まれています。コピーし直してください。"); return }
+  if(el && !/^[\x21-\x7E]+$/.test(el)){ showErr("ElevenLabsキーに全角文字などが含まれています。コピーし直してください。"); return }
+  clearErr();
+  if(el){
+    state.elKey=el; $("elKeyInput").value="";
+    $("scribeOpt").disabled=false;
+    if(!state.key && !key) $("modeSel").value="scribe";
+  }
+  if(key){
+    state.key=key; $("keyInput").value="";
+    await loadModels();  // 失敗時は内部で state.key を無効化
+  }
+  updateBadge(); updateModeUI(); broadcastConfig(); saveKeys(); saveSettings();
+};
+
+// ---------- 設定の保存・復元（localStorage。キーはオプトイン） ----------
+const STORE="navi-generic-settings", KEYSTORE="navi-generic-keys";
+function saveSettings(){
+  try{ localStorage.setItem(STORE, JSON.stringify({
+    mode:$("modeSel").value,
+    stt: state.sttLoaded ? $("sttSel").value : null,
+    llm: $("llmField").classList.contains("hidden") ? null : $("llmSel").value,
+    tpl:$("tplSel").value, dur:$("durInput").value, agenda:$("agendaInput").value, title:$("titleInput").value, pickup:$("pickupSel").value,
+    goal:$("goalInput").value, checklist:$("checkInput").value, mic:$("micSel").value
+  })) }catch(_){}
+}
+function saveKeys(){
+  try{
+    if($("persistChk").checked && (state.key||state.elKey))
+      localStorage.setItem(KEYSTORE, JSON.stringify({key:state.key, elKey:state.elKey}));
+    else localStorage.removeItem(KEYSTORE);
+  }catch(_){}
+}
+$("persistChk").onchange=saveKeys;
+async function restoreStored(){
+  let s=null,k=null;
+  try{ s=JSON.parse(localStorage.getItem(STORE)||"null"); k=JSON.parse(localStorage.getItem(KEYSTORE)||"null") }catch(_){}
+  if(k && (k.key||k.elKey)){
+    if(k.elKey){ state.elKey=k.elKey; $("scribeOpt").disabled=false }
+    if(k.key){ state.key=k.key; await loadModels() }
+  }
+  if(s){
+    if(s.mode && !(s.mode==="scribe" && $("scribeOpt").disabled)) $("modeSel").value=s.mode;
+    if(s.stt && [...$("sttSel").options].some(o=>o.value===s.stt)) $("sttSel").value=s.stt;
+    if(s.llm && [...$("llmSel").options].some(o=>o.value===s.llm)) $("llmSel").value=s.llm;
+    if(s.dur) $("durInput").value=s.dur;
+    if(typeof s.agenda==="string") $("agendaInput").value=s.agenda;
+    if(typeof s.title==="string") $("titleInput").value=s.title;
+    if(s.pickup && ["near","far"].includes(s.pickup)) $("pickupSel").value=s.pickup;
+    // テンプレ選択が正: 選択したテンプレの項目を必ず適用して復元（古いcheckInputが残るズレを防ぐ）
+    if(s.tpl && allTpls().some(t=>t.name===s.tpl)) selectTemplate(s.tpl);
+    else if(typeof s.goal==="string"){ $("goalInput").value=s.goal; if(typeof s.checklist==="string") $("checkInput").value=s.checklist }
+    state.savedMic=s.mic||"";
+    if(state.savedMic) refreshMics();
+  }
+  updateBadge(); updateModeUI();
+  if((state.key||state.elKey) && VIEW==="demo" && !state.live && !state.mock)
+    $("recHint").textContent="保存済みの設定を復元しました。赤いボタンで開始できます。";
+}
+
+// ---------- タブ間同期（設定タブ → デモ画面。BroadcastChannel＝同一ブラウザ内のみ・保存なし） ----------
+const bc = ("BroadcastChannel" in window) ? new BroadcastChannel("navi-generic-sync") : null;
+function broadcastConfig(){
+  if(!bc || VIEW!=="setup" || !(state.key||state.elKey)) return;
+  bc.postMessage({type:"config", key:state.key, elKey:state.elKey,
+    mode:$("modeSel").value,
+    stt: state.sttLoaded ? $("sttSel").value : null,
+    llm: $("llmField").classList.contains("hidden") ? null : $("llmSel").value,
+    tpl:$("tplSel").value, tpls:customTpls,
+    goal:$("goalInput").value, checklist:$("checkInput").value});
+}
+if(bc) bc.onmessage = async ev=>{
+  const m=ev.data||{};
+  if(m.type==="hello" && VIEW==="setup"){ broadcastConfig(); return }
+  if(m.type==="config" && VIEW==="demo"){
+    if(m.elKey && m.elKey!==state.elKey){ state.elKey=m.elKey; $("scribeOpt").disabled=false }
+    if(m.key && m.key!==state.key){ state.key=m.key; await loadModels() }
+    if(m.mode) $("modeSel").value=m.mode;
+    if(m.stt && [...$("sttSel").options].some(o=>o.value===m.stt)) $("sttSel").value=m.stt;
+    if(m.llm && [...$("llmSel").options].some(o=>o.value===m.llm)) $("llmSel").value=m.llm;
+    if(Array.isArray(m.tpls)){ customTpls=m.tpls; persistTpls(); renderTplSelects() }
+    if(m.tpl && allTpls().some(t=>t.name===m.tpl)) tplSelects().forEach(s=>{ s.value=m.tpl });
+    if(typeof m.goal==="string") $("goalInput").value=m.goal;
+    if(typeof m.checklist==="string") $("checkInput").value=m.checklist;
+    updateBadge(); updateModeUI();
+    if(!state.live && !state.mock) $("recHint").textContent="設定タブから接続情報を受け取りました。赤いボタンで開始できます。";
+  }
+};
+// 設定タブでは、各設定の変更もその場でデモ画面へ反映＋保存
+["modeSel","sttSel","llmSel","goalInput","checkInput"].forEach(id=>{
+  $(id).addEventListener("change", ()=>{ broadcastConfig(); saveSettings() });
+});
+$("micSel").addEventListener("change", saveSettings);
+// テンプレートUIの配線（設定タブ=編集フル装備 / デモ画面=選択のみ）
+tplSelects().forEach(sel=>{ sel.addEventListener("change", ()=>selectTemplate(sel.value)) });
+if($("tplSaveBtn")) $("tplSaveBtn").onclick=()=>{
+  const name=$("tplName").value.trim() || (isBuiltinTpl($("tplSel").value) ? "" : $("tplSel").value);
+  if(!name){ showErr("テンプレート名を入力してください（標準テンプレートは上書きできないため、別名で保存します）"); return }
+  if(isBuiltinTpl(name)){ showErr("標準テンプレートと同じ名前では保存できません。別の名前を付けてください。"); return }
+  clearErr();
+  const base=tplMeta();  // 会議モード・アドバイス方針等のメタは、いま選んでいるテンプレートから引き継ぐ
+  const t={name, goal:$("goalInput").value, checklist:$("checkInput").value,
+           mode:base.mode, summaryMin:base.summaryMin, durationMin:base.durationMin, advice:base.advice, skillChecks:base.skillChecks, playbook:base.playbook, call:base.call};
+  const i=customTpls.findIndex(x=>x.name===name);
+  if(i>=0) customTpls[i]=t; else customTpls.push(t);
+  persistTpls(); renderTplSelects(name);
+  selectTemplate(name, false); // 保存内容＝いまの編集内容なので再適用は不要
+};
+if($("tplDelBtn")) $("tplDelBtn").onclick=()=>{
+  const name=$("tplSel").value;
+  if(isBuiltinTpl(name)) return;
+  customTpls=customTpls.filter(x=>x.name!==name);
+  persistTpls(); renderTplSelects(BUILTIN_TPLS[0].name);
+  selectTemplate(BUILTIN_TPLS[0].name);
+};
+renderTplSelects(CALL_TPL_NAME);
+selectTemplate(CALL_TPL_NAME);  // N西デモは架電テンプレートを既定に
+$("durInput").addEventListener("change", saveSettings);
+$("agendaInput").addEventListener("change", saveSettings);
+$("titleInput").addEventListener("change", saveSettings);
+$("pickupSel").addEventListener("change", ()=>{
+  saveSettings();
+  if(state.live) $("recHint").textContent="集音のしかたの変更は、いったん停止して次の開始から反映されます。";
+});
+if(bc && VIEW==="demo") bc.postMessage({type:"hello"});  // 起動時、先に開いている設定タブへ問い合わせ
+
+// ---------- タブ切り替え（ツリー/書き起こし/要約=顧客共有OK・確認/設定=社内） ----------
+function applyTab(){
+  const t=state.tab;
+  $("treeCard").classList.toggle("hidden", t!=="tree");
+  $("convCard").classList.toggle("hidden", t!=="transcript");
+  $("memoCard").classList.toggle("hidden", t!=="memo");  // 構造化要約は全テンプレートで利用可（2026-09-07拡張）
+  $("memoModeHint").classList.add("hidden");
+  // テンプレ選択・会議タイトルのバーは書き起こしタブ専用（実行中は畳む）
+  if(VIEW!=="setup") $("tplBar").classList.toggle("hidden", t!=="transcript" || state.live || state.mock);
+  // ロープレチェックはskillChecksを持つテンプレートのみ表示
+  if($("skillWrap")) $("skillWrap").classList.toggle("hidden", !(tplMeta().skillChecks||[]).length);
+  if($("pbWrap")){ const has=interviewMode()&&!!tplMeta().playbook; $("pbWrap").classList.toggle("hidden", !has); if(has) renderPlaybook(state.activeBranch||"") }
+  $("naviCard").classList.toggle("hidden", t!=="cue");
+  $("setupCard").style.display = (t==="setup"||VIEW==="setup") ? "" : "none";
+  $("histCard").classList.toggle("hidden", t!=="setup");
+  document.querySelectorAll("#tabNav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===t));
+}
+function switchTab(t){ state.tab=t; applyTab() }
+document.querySelectorAll("#tabNav button").forEach(b=>{ b.onclick=()=>switchTab(b.dataset.tab) });
+$("tabStatus").onclick=()=>switchTab("transcript");
+
+// ---------- 画面の出し分け（デモ / 設定タブ） ----------
+if(VIEW==="setup"){
+  state.tab="setup"; applyTab();
+  $("tabNav").style.display="none";
+  document.querySelector("footer").style.display="none";
+  $("tplBar").style.display="none";
+  $("histCard").classList.add("hidden");
+  $("setupNote").classList.remove("hidden");
+  $("setupLink").classList.add("hidden");
+  document.title="Bring Out — リアルタイムナビ v3 設定";
+}else{
+  applyTab();
+  $("mockBtn").textContent="モック会話を再生";
+  updateBadge();  // デモ画面の初期表示もベンダー名なしに揃える
+}
+restoreStored();  // 保存済みの設定・キーを復元（どちらのタブでも）
+
+async function loadModels(){
+  try{
+    const r = await fetch("https://api.openai.com/v1/models",{headers:{Authorization:"Bearer "+state.key}});
+    const j = await r.json();
+    if(j.error) throw new Error(j.error.message||"モデル一覧の取得に失敗");
+    const ids = (j.data||[]).map(m=>m.id).sort();
+    const stt = ids.filter(x=>/transcribe|^whisper-1$/.test(x) && !/tts|realtime/.test(x));
+    const llm = ids.filter(x=>/^gpt-/.test(x) && !/audio|realtime|transcribe|tts|image|search|instruct/.test(x));
+    const fill=(sel,list,prefs)=>{
+      sel.innerHTML="";
+      list.forEach(id=>{const o=document.createElement("option");o.value=o.textContent=id;sel.appendChild(o)});
+      for(const p of prefs){const hit=list.find(x=>p.test(x));if(hit){sel.value=hit;return}}
+    };
+    // STT: 発話確定イベントが確実に出るmini-transcribeを既定に（live-transcribeは確定が出ずカンペが起動しない事象を実機確認→ソフト確定で救済しつつ非推奨）
+    if(stt.length){ fill($("sttSel"), stt, [/mini-transcribe/, /transcribe(?!.*live)/, /transcribe/, /^whisper-1$/]); state.sttLoaded=true }
+    // LLM: 低コスト・低遅延のluna系を最優先（裸のgpt-5.6はSol=最上位価格になるので選ばない）
+    if(llm.length){ fill($("llmSel"), llm, [/luna/, /^gpt-[\d.]+-mini$/, /mini/, /nano/, /^gpt-[\d.]+$/]); $("llmField").classList.remove("hidden") }
+  }catch(e){
+    showErr("モデル一覧の取得に失敗しました: "+e.message+"\nOpenAIキーが正しいか確認してください。");
+    state.key=null;
+  }
+}
+function sttModel(){ return $("sttField").classList.contains("hidden") ? "gpt-4o-mini-transcribe" : $("sttSel").value }
+function llmModel(){ return $("llmField").classList.contains("hidden") ? "gpt-5.6-luna" : $("llmSel").value }
+function checklistItems(){ return $("checkInput").value.split("\n").map(s=>s.trim()).filter(Boolean) }
+// 接続方式の表示ラベル。デモ画面ではモデル名・ベンダー名を出さない
+function modeLabel(mode){
+  if(VIEW==="demo") return mode==="scribe" ? "低遅延接続" : (mode==="realtime" ? "リアルタイム接続" : "区切り送信");
+  return mode==="scribe" ? "Scribe v2 / ja" : ((mode==="realtime"?"Realtime / ":"5秒区切り / ")+sttModel());
+}
+
+// ---------- 書き起こし表示 ----------
+// v2: 最新の発言を一番上に表示（新しいものほど上）。視線が固定位置で済み、スクロール追従が不要になる
+function pinTop(){
+  const el=$("transcript");
+  el.scrollTop=0;
+  requestAnimationFrame(()=>{ el.scrollTop=0 });  // レイアウト確定後にもう一度ピン留め
+}
+function renderTranscript(){
+  const el=$("transcript");
+  const n=state.utts.length;
+  const whoTag=u=>u.who?`<span class="who ${u.who==="me"?"who-me":"who-peer"}">${u.who==="me"?"自分":"相手"}</span>`:"";
+  const rows=[];
+  // 暫定（話し途中）が最上段、その下に確定行を新しい順で
+  if(state.interim) rows.push(`<div class="seg interim now"><span class="t">…</span><span>${esc(state.interim)}</span></div>`);
+  for(let i=n-1;i>=0;i--){
+    const u=state.utts[i];
+    rows.push(`<div class="seg${(!state.interim && i===n-1)?' now':''}"><span class="t">${fmtT(u.t)}</span>${whoTag(u)}<span>${esc(u.text)}</span></div>`);
+  }
+  el.innerHTML = rows.join("") || '<div class="empty-hint">ここに会話が流れます（最新の発言が一番上に出ます）</div>';
+  if(state.follow) pinTop();
+}
+// 過去を読みに下へスクロールしたら追従を一時停止し、「最新へ」ボタンを出す。最上部へ戻れば自動再開
+$("transcript").addEventListener("scroll",()=>{
+  const el=$("transcript");
+  const atTop = el.scrollTop < 40;
+  state.follow = atTop;
+  $("jumpBtn").classList.toggle("hidden", atTop);
+});
+$("jumpBtn").onclick=()=>{ state.follow=true; $("jumpBtn").classList.add("hidden"); pinTop() };
+window.addEventListener("resize",()=>{ if(state.follow) pinTop() });
+function addUtt(text){
+  text=(text||"").trim();
+  if(!text) return;
+  // 日本語会話での他言語ハルシネーション対策: 日本語を含まないハングル/キリル文字の断片は破棄
+  if(/[가-힯Ѐ-ӿ]/.test(text) && !/[぀-ヿ一-鿿]/.test(text)){
+    wslog("他言語の誤認識を破棄: "+text);
+    return;
+  }
+  // STTプロンプトのエコー対策: 無音・不明瞭な区間でヒント文がそのまま出力される現象を出口で破棄
+  {
+    const norm=s=>s.replace(/[\s。、．，,.!！?？・「」]/g,"");
+    const pn=norm(STT_PROMPT), tn=norm(text);
+    if(tn.length>=4 && (pn.includes(tn) || tn.includes(pn))){
+      wslog("STTプロンプトのエコーを破棄: "+text);
+      return;
+    }
+  }
+  const who = state.mock ? null : attributeSpeaker();
+  state.uttStartAt=0;
+  state.utts.push({t:elapsed(), text, who});
+  matchEntities(text);  // エンティティ辞書照合（クライアント側・即時）
+  state.interim="";
+  renderTranscript();
+  if(!state.mock && state.key) runSignal();  // 速い車線: シグナル判定
+  if(!meetingMode()) scheduleCue();          // 遅い車線（会議モードは10分タイマー駆動なので発話ではカンペを更新しない）
+}
+
+// ---------- 入力レベル監視（マイクがほぼ無音のまま走る事故の検知） ----------
+function checkInputLevel(){
+  if(!state.live) return;
+  const pct=(state.maxPeak*100).toFixed(1);
+  if(state.maxPeak<0.02){
+    state.lvlWarned=true;
+    wslog(`入力レベル低下警告: 直近5秒の最大 ${pct}%`);
+    showErr(`マイクの音がほとんど届いていません（直近5秒の最大レベル ${pct}%）。次を確認してください:\n・マイク選択が実際に話しているマイクと合っているか\n・画面収録・録画アプリがマイクを占有していないか\n・Macの入力音量が下がっていないか`);
+  }else if(state.lvlWarned){
+    state.lvlWarned=false; clearErr();
+    wslog("入力レベル回復");
+  }
+  state.maxPeak=0;
+}
+
+// ---------- ソフト確定（確定イベントが来ないモデルの保険） ----------
+// 暫定テキストが1.5秒更新されなかったら発話区切りとみなして確定させる
+function armSoftCommit(){
+  state.interimAt=Date.now();
+  clearTimeout(state.softTimer);
+  state.softTimer=setTimeout(()=>{
+    if(!state.live) return;
+    const txt=(state.interim||"").trim();
+    if(!txt) return;
+    state.interim="";
+    state.lastSoft={text:txt, at:Date.now()};
+    wslog("暫定テキストが1.5秒停止→発話区切りとして確定（ソフト確定）");
+    addUtt(txt);
+  },1500);
+}
+// ソフト確定の直後に本物の確定イベントが来た場合の二重登録を防ぐ
+function isDupOfSoftCommit(text){
+  const s=state.lastSoft;
+  if(!s || Date.now()-s.at>6000) return false;
+  const a=(text||"").trim(), b=s.text;
+  return !!a && (a===b || a.includes(b) || b.includes(a));
+}
+
+// ---------- 話し途中の判定（長い発話でも案内が止まらないように） ----------
+// 暫定テキストが流れている間も、シグナルは2.5秒ごと・詳細カンペは5秒ごとに更新をかける
+function maybeMidJudge(){
+  if(state.mock || !state.key) return;
+  if(meetingMode()) return;  // 会議モードの要約はタイマー駆動のみ
+  if((state.interim||"").trim().length<10) return;
+  if(Date.now()-state.lastSigAt>=2500) runSignal();
+  if(Date.now()-state.lastCueAt>=5000) scheduleCue();
+}
+function transcriptForJudge(n){
+  let t=state.utts.slice(-n).map(u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`).join("\n");
+  if((state.interim||"").trim()) t+=(t?"\n":"")+`[話し途中] ${state.interim.trim()}`;
+  return t;
+}
+
+// ---------- シグナル判定（速い車線） ----------
+const SIG_SCHEMA = {
+  type:"object", additionalProperties:false,
+  properties:{
+    signal:{type:"string",enum:["green","yellow","red"]},
+    word:{type:"string",description:"いまの状態を表す12字以内の一言"},
+    exit_type:{type:"string",enum:["なし","明確な拒否","そっけない相槌","多忙・時間切れ","権限逃げ","先送り","打ち切り宣言","警戒・不信"]}
+  },
+  required:["signal","word","exit_type"]
+};
+function sigPrompt(){
+  if(callMode()) return `あなたは法人向け電話営業（通信サービスの架電・訪問アポ獲得）の信号判定器。進行中の通話の書き起こし（誤認識あり。[自分]=架電側/[相手]=お客様側の推定ラベルが付くことがあるが誤りうる。ラベルがない発言は文脈で話者を判断）を読み、いまの状態を1つだけ返す。
+- green: 脈あり。会話が続いている、困りごとや現状を話してくれている、打診に前向き
+- yellow: 撤退サイン。反応がいまいち（生返事・そっけない相槌の連続、具体例を振っても乗ってこない、手が離せない様子、声のトーンが下がった、「特に問題ない」が繰り返される）。無理に引っ張らず、かけ直しを提案して切り上げるべき状態
+- red: 明確な離脱（はっきりした拒否/打ち切り宣言/警戒・不信/権限逃げ/先送り）
+直近の相手側の発言を最重視。wordは12字以内。redのときだけexit_typeに類型、それ以外は「なし」。
+apo_probは、この通話で最終的に訪問アポ（日時の合意）が取れる確率を0〜100の整数で推定する。目安: 通話冒頭は20前後。現状を話してくれる+5〜10、困りごとが点灯+10〜20、業務影響・体制の話まで進む+10、訪問打診に前向き→70以上、日時合意→90以上。生返事・多忙・「問題ない」の繰り返しは-10〜20、明確な拒否→10以下。前回値が与えられた場合は、新しい発言の変化分だけ動かす（根拠なく大きく跳ねさせない）。apo_reasonに変動の理由を25字以内で。`;
+  if(interviewMode()) return `あなたは採用面接の信号判定器。進行中の最終面接の書き起こし（誤認識あり。[自分]=面接官側/[相手]=候補者側の推定ラベルが付くことがあるが誤りうる。ラベルがない発言は文脈で話者を判断）を読み、いまの状態を1つだけ返す。
+- green: 良い流れ。候補者が具体的なエピソード・数字・覚悟を語れている
+- yellow: 要注意。答えが抽象的・一般論・準備不足、志望理由が薄い、質問に正面から答えていない、面接官が話しすぎ
+- red: 懸念シグナルが明確に出た（志望動機が浅い/どこでもいい併願/短期離職の傾向/家族の合意なし/独立志向/自己正当化/覚悟不足/処遇先行/ハードワーク不安）
+直近の候補者側の発言を最重視。wordは12字以内。redのときだけexit_typeに類型、それ以外は「なし」。`;
+  if(meetingMode()) return `あなたは社内会議の進行の信号判定器。進行中の会議の書き起こし（誤認識あり）を読み、いまの状態を1つだけ返す。
+- green: 順調。議論が前に進んでいる
+- yellow: 要注意。発散・脱線・停滞・同じ議論の繰り返し
+- red: 時間リスク。結論が出ないまま長引いている、または本題に入れていない
+wordは12字以内でいまの状態（例「議題2で発散気味」「決定が出た」）。exit_typeは常に「なし」。`;
+  return `あなたは法人営業の会話の信号判定器。進行中の会話の書き起こし（誤認識あり。[自分]=こちら側/[相手]=会議相手の推定ラベルが付くことがあるが誤りうる。ラベルがない発言は文脈で話者を判断）を読み、いまの状態を1つだけ返す。
+- green: 良い流れ。このまま進行してよい
+- yellow: 要注意。温度の低下・そっけない相槌・「特に問題ない」での防壁・離脱の気配・話が停滞
+- red: 離脱シグナルが明確に出た（明確な拒否/多忙・時間切れ/権限逃げ/先送り/打ち切り宣言/警戒・不信）
+直近の相手側の発言を最重視。wordは12字以内。redのときだけexit_typeに類型、それ以外は「なし」。`;
+}
+function renderSignal(color, word, mock, ms){
+  $("signalBar").className="signal-bar s-"+color;
+  const def=callMode()?{green:"脈あり・このまま進行",yellow:"撤退サイン：かけ直し提案",red:"離脱シグナル"}:{green:"このまま進行",yellow:"要注意",red:"離脱シグナル"};
+  $("sigWord").textContent=(callMode()&&color==="yellow") ? ("撤退サイン："+(word||"かけ直し提案")) : (word||def[color]||"—");
+  $("sigMeta").textContent= mock ? "モック" : (ms!=null ? `${(ms/1000).toFixed(1)}s` : "");
+}
+async function runSignal(){
+  if(state.sigBusy){ state.sigPending=true; return }
+  const GAP=meetingMode()?15000:1000;  // 会議モードは信号もゆっくり
+  const since=Date.now()-state.lastSigAt;
+  if(since<GAP){
+    state.sigPending=true;
+    setTimeout(()=>{ if(state.sigPending && !state.sigBusy){ state.sigPending=false; runSignal() } }, GAP-since);
+    return;
+  }
+  state.sigBusy=true; state.lastSigAt=Date.now();
+  const model=llmModel(), t0=Date.now();
+  try{
+    const transcript=transcriptForJudge(10);
+    const call=callMode();
+    const sigUser = call && state.apoProb!=null ? `# 前回のアポ獲得確率\n${state.apoProb}%\n\n# 直近の会話\n${transcript}` : transcript;
+    const mk=(fb)=>{
+      const b={model, messages:[
+        {role:"system",content:sigPrompt()+(fb?(call?"\n必ず {signal, word, exit_type, apo_prob, apo_reason} のJSONだけを出力。":"\n必ず {signal, word, exit_type} のJSONだけを出力。"):"")},
+        {role:"user",content:sigUser}]};
+      b.response_format = fb ? {type:"json_object"} : {type:"json_schema",json_schema:{name:"signal",strict:true,schema:sigSchema()}};
+      if(/^gpt-5/.test(model) && !fb) b.reasoning_effort = /^gpt-5\./.test(model) ? "none" : "minimal";
+      return b;
+    };
+    let r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(false))});
+    let j=await r.json();
+    if(j.error && /response_format|json_schema|reasoning|unsupported|param/i.test(j.error.message||"")){
+      r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(true))});
+      j=await r.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    const d=JSON.parse(j.choices[0].message.content);
+    renderSignal(d.signal, d.signal==="red"&&d.exit_type&&d.exit_type!=="なし" ? d.exit_type : d.word, false, Date.now()-t0);
+    if(call && d.apo_prob!=null) renderApo(d.apo_prob, d.apo_reason);
+    // 架電モード: 黄色（撤退サイン）に変わった瞬間にカンペを前倒し更新し、かけ直しトークをすぐ出す
+    if(call && d.signal==="yellow" && state.lastSigColor!=="yellow"){ state.lastCueAt=0; scheduleCue() }
+    state.lastSigColor=d.signal;
+  }catch(e){
+    console.warn("[navi-signal] 判定失敗:", e.message);
+  }finally{
+    state.sigBusy=false;
+    if(state.sigPending){ state.sigPending=false; runSignal() }
+  }
+}
+
+// ---------- アポ獲得確率（架電モード） ----------
+function renderApo(p, reason){
+  p=Math.max(0, Math.min(100, Math.round(+p)));
+  if(!isFinite(p)) return;
+  const prev=state.apoProb;
+  state.apoProb=p; state.apoHist.push(p); if(state.apoHist.length>40) state.apoHist.shift();
+  $("apoNum").innerHTML=p+"<small>%</small>";
+  $("apoFill").style.width=p+"%";
+  $("apoBar").classList.remove("lv-low","lv-high");
+  if(p<30) $("apoBar").classList.add("lv-low"); else if(p>=60) $("apoBar").classList.add("lv-high");
+  const dl=$("apoDelta");
+  if(prev==null||prev===p){ dl.className="apo-delta flat"; dl.textContent=prev==null?"":"±0" }
+  else if(p>prev){ dl.className="apo-delta up"; dl.textContent="▲+"+(p-prev) }
+  else { dl.className="apo-delta down"; dl.textContent="▼"+(p-prev) }
+  if(reason) $("apoReason").textContent=reason;
+  const h=state.apoHist, W=120, H=32;
+  if(h.length<2){ $("apoSpark").innerHTML=""; return }
+  const pts=h.map((v,i)=>`${(i*(W-4)/(h.length-1)+2).toFixed(1)},${(H-2-(v/100)*(H-4)).toFixed(1)}`).join(" ");
+  const last=pts.split(" ").pop().split(",");
+  $("apoSpark").innerHTML=`<line x1="0" x2="${W}" y1="${H/2}" y2="${H/2}" stroke="#EEEAF5" stroke-dasharray="2 3"/><polyline points="${pts}" fill="none" stroke="#7724EB" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="3" fill="#7724EB"/>`;
+}
+function resetApo(){
+  state.apoProb=null; state.apoHist=[]; state.lastSigColor="";
+  if(!$("apoBar")) return;
+  $("apoNum").textContent="—"; $("apoFill").style.width="0"; $("apoDelta").textContent=""; $("apoDelta").className="apo-delta flat";
+  $("apoBar").classList.remove("lv-low","lv-high");
+  $("apoReason").textContent="会話が始まると、発話ごとに更新されます"; $("apoSpark").innerHTML="";
+}
+
+// ---------- カンペ（ナビ判定） ----------
+const EXIT_TYPES_SALES=["なし","明確な拒否","そっけない相槌","多忙・時間切れ","権限逃げ","先送り","打ち切り宣言","警戒・不信"];
+// 面接モードの懸念シグナル（見送り要因の類型。竹内社長の面接ノウハウ分析から）
+const EXIT_TYPES_INTERVIEW=["なし","志望動機が浅い","どこでもいい併願","短期離職の傾向","家族の合意なし","独立志向","自己正当化","覚悟不足","処遇先行","ハードワーク不安"];
+function exitTypes(){ return interviewMode()?EXIT_TYPES_INTERVIEW:EXIT_TYPES_SALES }
+function cueSchema(){
+  const sc=JSON.parse(JSON.stringify(CUE_SCHEMA)); sc.properties.exit_signal.enum=exitTypes();
+  if(callMode()) sc.properties.verdict.enum=["ok_proceed","dig_deeper","retreat","exit_signal","wrap_up"];
+  return sc;
+}
+function sigSchema(){
+  const sc=JSON.parse(JSON.stringify(SIG_SCHEMA)); sc.properties.exit_type.enum=exitTypes();
+  if(callMode()){
+    sc.properties.apo_prob={type:"integer",description:"訪問アポ獲得の推定確率（0〜100）"};
+    sc.properties.apo_reason={type:"string",description:"確率が動いた理由（25字以内）"};
+    sc.required=sc.required.concat(["apo_prob","apo_reason"]);
+  }
+  return sc;
+}
+const CUE_SCHEMA = {
+  type:"object", additionalProperties:false,
+  properties:{
+    verdict:{type:"string",enum:["ok_proceed","dig_deeper","exit_signal","wrap_up"]},
+    branch:{type:"string",description:"面接モードのとき、いま適用すべき分岐（候補者タイプ名または併願先タイプ名。与えられた分岐ガイドの名前をそのまま）。該当なし・面接モード以外は空文字"},
+    headline:{type:"string",description:"営業担当が一瞬で読める20字以内の指示"},
+    detail:{type:"string",description:"理由を40字以内で"},
+    questions:{type:"array",items:{type:"string"},description:"そのまま声に出して読める質問文。最大3つ"},
+    exit_signal:{type:"string",enum:["なし","明確な拒否","そっけない相槌","多忙・時間切れ","権限逃げ","先送り","打ち切り宣言","警戒・不信"]},
+    counter_move:{type:"string",description:"離脱シグナル検知時の切り返しセリフ。なければ空文字"},
+    checklist:{type:"array",items:{
+      type:"object",additionalProperties:false,
+      properties:{
+        i:{type:"integer",description:"確認したい項目の番号（0始まり・与えられた順）"},
+        s:{type:"string",enum:["f","p","m"],description:"f=埋まった p=一部 m=未"},
+        n:{type:"string",description:"確認できた中身そのものの要約。『◯◯を確認』のようなメタ表現は禁止（例: 前職は商社の海外営業・創業20年目・趣味はゴルフ）。40字以内。mなら空文字"},
+        q:{type:"string",description:"s=\"p\"（一部）のとき、埋め切るための追加質問例をそのまま声に出せる形で35字以内。それ以外は空文字"}
+      },
+      required:["i","s","n","q"]
+    }}
+  },
+  required:["verdict","branch","headline","detail","questions","exit_signal","counter_move","checklist"]
+};
+
+// 面接モードの分岐ガイド（候補者タイプ／併願先／魅力づけの弾）をプロンプト用テキストに整形
+function playbookSec(){
+  const pb=tplMeta().playbook; if(!pb) return "";
+  const li=(arr)=> (arr||[]).map(x=>"  - "+x).join("\n");
+  const types=(pb.types||[]).map(t=>`■ ${t.name}\n 見分け方:\n${li(t.signals)}\n やること:\n${li(t.do)}\n 言い回し:\n${li(t.say)}`).join("\n");
+  const rivals=(pb.rivals||[]).map(r=>`■ ${r.name}\n 聞くこと:\n${li(r.ask)}\n 差別化の語り:\n${li(r.say)}`).join("\n");
+  const attract=(pb.attract||[]).map(a=>`■ ${a.topic}: ${a.say}`).join("\n");
+  return `
+
+【分岐ガイド。会話の事実から該当する分岐を1つ選び branch に名前をそのまま入れ、内容を headline/questions/counter_move に反映する】
+# 候補者タイプ別
+${types}
+
+# 併願先タイプ別
+${rivals}
+
+# 魅力づけの弾（wrap_up や候補者からの質問への回答提案に使う。会社の語りをそのまま questions に入れてよい）
+${attract}`;
+}
+function callSec(){
+  if(!callMode()) return "";
+  return `
+
+【架電モード（最優先ルール）】
+これは電話でのアポ獲得。顧客の反応がいまいちな場合は無理に引っ張らず、撤退してかけ直しを提案する。
+- 撤退サインの目安: 生返事・そっけない相槌が続く／具体例を振っても乗ってこない／手が離せない・周りが騒がしい様子／「特に問題ない」が2回以上／声のトーンが下がった
+- 撤退サインが出たら verdict は "retreat"。headlineは「無理せず、かけ直しを提案」等、counter_move には相手を気遣いつつ、次に話す内容を一言予告し、かけ直しの日時を二者択一で提案するセリフ（例「お忙しいところ失礼しました。回線の保守窓口の件で、あらためてお電話してもよろしいですか。来週火曜の午前と木曜の午後でしたら、どちらがご都合よろしいでしょうか」）を入れる。questions には担当者名・直通番号・つながりやすい時間帯の確認など、かけ直しに必要な確認を最大2つ。exit_signal は「なし」でよい
+- かけ直しの日時が合意できたら "wrap_up"（日時と担当者を復唱して丁寧に切り上げる）
+- "exit_signal" は明確な拒否・打ち切り宣言など、はっきりした離脱のときだけ使う。そっけない相槌だけなら "retreat"`;
+}
+function sysPrompt(){
+  // テンプレート固有のアドバイス方針（あれば判定・提案に注入）
+  const adv=(tplMeta().advice||"").trim();
+  const advSec=adv?`
+
+【このテンプレート固有のアドバイス方針。headline・questions・counter_move・verdictの判断に必ず反映すること】
+${adv}`:"";
+  if(interviewMode()) return `あなたは採用面接（社長・役員による最終面接）を支援する「リアルタイムナビ」です。進行中の面接の書き起こしを読み、面接官がいま見るべきカンペを1枚だけ返します。書き起こしには音声認識の誤りが含まれます。[自分]=面接官側/[相手]=候補者側の推定ラベルが付くことがありますが誤りえます。ラベルがない発言は文脈から話者を推定してください。充足判定と懸念シグナルは[相手]（候補者）の発言を重視します。
+
+やること:
+1. 確認項目の充足判定 — 「確認したい項目」の各項目について会話中の根拠を探し、3段階で判定する。f=十分確認できた / p=話題には出たが不十分・あいまい / m=未確認。書き起こしにない情報は推測せず、明確な根拠がある場合だけfにする。
+2. 次の問いかけの提案 — 未確認・不十分な項目のうち、いまの話題から自然につなげて聞けるものを優先し、そのまま声に出して読める質問文を提案する。項目の順番どおりに機械的に聞かせず、生い立ち→学生時代→就職→現職→転職理由→併願→志望理由→覚悟→将来像という時系列の流れを大切にする。候補者の直前の発言に出た固有の事実（順位・数字・家族・出来事）を一つ拾って深掘る聞き方にする。
+3. 分岐の適用 — 分岐ガイド（候補者タイプ／併願先タイプ）のうち、会話の事実から該当するものがあれば branch にその名前をそのまま入れ、headline・questions・counter_move をその分岐の「やること」「言い回し」に沿わせる。該当がなければ空文字。
+4. 懸念シグナルの検知 — 類型: 志望動機が浅い / どこでもいい併願 / 短期離職の傾向 / 家族の合意なし / 独立志向 / 自己正当化 / 覚悟不足 / 処遇先行 / ハードワーク不安。検知したら、その場で正面から問い直すセリフ（例「僕の立場だったら、いまの答えをどう思います？」「それなら現職に残る選択もありますよね。なぜうちなんですか？」）を counter_move に1つ入れる。見送り確定の断定はせず、候補者に語り直す機会を与える聞き方にする。
+
+verdictの決め方:
+- 候補者が懸念シグナルを出している → "exit_signal"
+- 未確認・不十分な項目が残っていて、いまの流れで深掘りすべき → "dig_deeper"
+- 会話が良い流れで、今の進め方のままでよい → "ok_proceed"
+- 人物像・覚悟・志望理由が埋まり、魅力づけ（会社の語り）や合否の心証・処遇・配属・次のアクションの伝達に進むべき → "wrap_up"
+
+headlineは20字以内の指示。detailは40字以内。questionsは面接官が声に出せる質問文（各35字以内・丁寧語でよい）を最大3つ（不要なら空配列）。checklistは「確認したい項目」の全項目を {i:項目番号, s:"f"/"p"/"m", n:確認できた中身そのものの要約40字以内・『◯◯を確認』等のメタ表現禁止(mなら空文字), q:一部(p)のとき埋め切るための追加質問例35字以内(それ以外は空文字)} で番号順に返す。[話し途中]の行は現在進行中の発言（未確定・誤認識あり）。全体を短く簡潔に返すこと。`+advSec+playbookSec();
+  if(meetingMode()) return `あなたは社内会議のファシリテーションを支援する「リアルタイムナビ」です。約${tplMeta().summaryMin||10}分ごとに会議の書き起こしを読み、参加者がいま見るべきカンペを1枚だけ返します。書き起こしには音声認識の誤りが含まれます。
+
+やること:
+1. 要約 — detailに、ここまで（特に直近${tplMeta().summaryMin||10}分）の議論の要点を100字以内でまとめる。決まったこと・議論中のこと・出た宿題を優先する。
+2. 確認項目の充足判定 — 各項目について会話中の根拠を探し、s="f"（十分）/"p"（不十分・あいまい）/"m"（未確認）で判定。推測せず、明確な根拠がある場合だけfにする。
+3. 残り時間の使い方の提案 — questionsに、残り時間・未消化の確認項目・議論の状態を踏まえた進行の提案を最大3つ、そのまま声に出して言える形で（例「残り20分なので、次の議題に移りませんか」「この宿題、担当と期限をいま決めませんか」）。
+
+verdictの決め方:
+- 順調に進んでいる → "ok_proceed"
+- 決め切れていない論点がある・確認項目の充足が足りない → "dig_deeper"
+- 結論が出ないまま時間を大きく使っている等、進行の立て直しが必要 → "exit_signal"（counter_moveに進行を立て直す一言。exit_signalフィールドは「なし」でよい）
+- 残り時間がわずかで、決定事項と宿題の確認に入るべき → "wrap_up"
+
+headlineは20字以内でいまの状況（例「議題2で発散気味」「順調。決定2件」）。checklistは全項目を {i:項目番号, s:"f"/"p"/"m", n:確認できた中身そのものの要約40字以内・メタ表現禁止(mなら空文字), q:一部(p)のとき埋め切る追加質問例35字以内(それ以外は空文字)} で番号順に返す。全体を短く簡潔に。`+advSec;
+  return `あなたは法人向けの商談・ヒアリングを支援する「リアルタイムナビ」です。進行中の会話の書き起こしを読み、営業担当がいま見るべきカンペを1枚だけ返します。書き起こしには音声認識の誤りが含まれます。[自分]=営業側/[相手]=顧客側の推定ラベルが付くことがありますが誤りえます。ラベルがない発言は文脈から話者を推定してください。充足判定と離脱シグナルは[相手]の発言を重視します。
+
+やること:
+1. 確認項目の充足判定 — 「確認したい項目」の各項目について会話中の根拠を探し、3段階で判定する。f=十分確認できた / p=話題には出たが不十分・あいまい / m=未確認。書き起こしにない情報は推測せず、明確な根拠がある場合だけfにする。
+2. 次の問いかけの提案 — 未確認・不十分な項目のうち、いまの話題から自然につなげて聞けるものを優先し、そのまま声に出して読める丁寧な質問文を提案する。項目リストの順番どおりに機械的に聞かせず、会話の流れを最優先する。尋問調にならないよう、相手の直前の発言を受けた聞き方にする。
+3. 離脱シグナルの検知 — 7類型: 明確な拒否 / そっけない相槌 / 多忙・時間切れ / 権限逃げ / 先送り / 打ち切り宣言 / 警戒・不信。検知したら、一般的な商談セオリー（いったん受け止めてから質問に転換する / 要求を小さくして次の接点を残す / 権限逃げは決裁ルートのヒントとして扱う / 「時期を改めて」には日時の再指定で応じる）に沿った、そのまま言える切り返しセリフをcounter_moveに1つ入れる。
+
+verdictの決め方:
+- 相手が離脱シグナルを出している → "exit_signal"
+- 未確認・不十分な項目が残っていて、いまの流れで深掘り・追加ヒアリングすべき → "dig_deeper"
+- 会話が良い流れで、今の進め方のままでよい → "ok_proceed"
+- 主要な項目が埋まり、ゴールの打診・クロージングへ進むべき → "wrap_up"
+
+${callSec()}
+
+headlineは20字以内の指示。detailは40字以内。questionsは丁寧な質問文（各35字以内）を最大3つ（不要なら空配列）。checklistは「確認したい項目」の全項目を {i:項目番号, s:"f"/"p"/"m", n:確認できた中身そのものの要約40字以内・『◯◯を確認』等のメタ表現禁止(mなら空文字), q:一部(p)のとき埋め切るための追加質問例35字以内(それ以外は空文字)} で番号順に返す。[話し途中]の行は現在進行中の発言（未確定・誤認識あり）。全体を短く簡潔に返すこと。`+advSec;
+}
+
+function scheduleCue(){
+  if(state.mock) return;
+  if(!state.key) return;
+  if(state.utts.length===0 && !(state.interim||"").trim()) return;
+  if(state.cueBusy){ state.cuePending=true; return }
+  const MIN_GAP=2000;
+  const since = Date.now()-state.lastCueAt;
+  if(since < MIN_GAP){
+    state.cuePending=true;
+    setTimeout(()=>{ if(state.cuePending && !state.cueBusy){ state.cuePending=false; runCue() } }, MIN_GAP-since);
+    return;
+  }
+  runCue();
+}
+
+async function runCue(){
+  if(state.cueBusy) return;
+  state.cueBusy=true; state.lastCueAt=Date.now(); state.lastCuedCount=state.utts.length;
+  $("cueCard").classList.add("updating");
+  $("cueMeta").innerHTML='<span class="spin"></span>';
+  const model=llmModel();
+  const t0=Date.now();
+  try{
+    const transcript = transcriptForJudge(meetingMode()?120:40);  // 会議モードは要約用に長め
+    const timeSec = meetingMode()
+      ? `\n\n# 時間\n経過 ${Math.round(elapsed()/60)}分 / 予定 ${durMin()}分（残り約 ${Math.max(0, durMin()-Math.round(elapsed()/60))}分）`
+      : "";
+    // 前回までの判定を引き継ぐ（判定窓の外に根拠が流れても巻き戻らないように）
+    const prevList=(state.lastChecklist||[]).filter(c=>c.status!=="missing");
+    const prevSec=prevList.length?`\n\n# 前回までの判定（確定済みの内容。巻き戻さず、新情報があれば更新・追記する）\n${prevList.map(c=>`- [${c.status==="filled"?"f":"p"}] ${c.item.split(/[:：]/)[0]}: ${c.note||""}`).join("\n")}`:"";
+    const user = `# ${meetingMode()?"会議のゴール":interviewMode()?"面接のゴール":"ヒアリングのゴール"}\n${$("goalInput").value.trim()||"（未設定）"}\n\n# 確認したい項目（番号つき）\n${checklistItems().map((x,i)=>`${i}: ${x}`).join("\n")}${prevSec}${timeSec}\n\n# ここまでの会話（新しいものほど下）\n${transcript}`;
+    const mkBody = (fallback)=>{
+      const body={model, messages:[{role:"system",content:sysPrompt()+(fallback?"\n\n必ず次のキーを持つJSONオブジェクトだけを出力"+(callMode()?"（verdictは ok_proceed/dig_deeper/retreat/exit_signal/wrap_up のいずれか）":"")+": verdict, branch, headline, detail, questions, exit_signal, counter_move, checklist（[{i,s,n,q}]）":"")},{role:"user",content:user}]};
+      body.response_format = fallback ? {type:"json_object"} : {type:"json_schema",json_schema:{name:"navi_cue",strict:true,schema:cueSchema()}};
+      // gpt-5.x系（5.6 Luna等）は非推論モードでTTFTを最小化。旧gpt-5系はminimal
+      if(/^gpt-5/.test(model) && !fallback) body.reasoning_effort = /^gpt-5\./.test(model) ? "none" : "minimal";
+      return body;
+    };
+    let r = await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mkBody(false))});
+    let j = await r.json();
+    if(j.error && /response_format|json_schema|reasoning|unsupported|param/i.test(j.error.message||"")){
+      r = await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mkBody(true))});
+      j = await r.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    const content=j.choices[0].message.content;
+    const d = JSON.parse(content);
+    renderCue(d, false, model, Date.now()-t0);
+    clearErr();
+  }catch(e){
+    showErr("ナビ判定に失敗しました: "+e.message);
+    $("cueMeta").textContent="";
+  }finally{
+    state.cueBusy=false;
+    $("cueCard").classList.remove("updating");
+    if(state.cuePending){ state.cuePending=false; scheduleCue() }
+  }
+}
+
+function renderCue(d, mock, model, ms){
+  const v = (meetingMode()?VERDICTS_MEETING:interviewMode()?VERDICTS_INTERVIEW:VERDICTS)[d.verdict] || VERDICTS.ok_proceed;
+  // 詳細判定の結果でも信号を同期（速い車線の判定より新しい情報のため上書き）
+  const sigMap= callMode()
+    ? {ok_proceed:"green", dig_deeper:"green", retreat:"yellow", exit_signal:"red", wrap_up:"green"}  // 架電: 黄色＝撤退サイン
+    : {ok_proceed:"green", dig_deeper:"yellow", exit_signal:"red", wrap_up:"green"};
+  renderSignal(sigMap[d.verdict]||"green",
+    d.verdict==="exit_signal" ? (d.exit_signal||v.label) : d.verdict==="retreat" ? "かけ直し提案" : v.label, mock, ms);
+  if(callMode()){ state.lastSigColor=sigMap[d.verdict]||"green"; if(d.apo_prob!=null) renderApo(d.apo_prob, d.apo_reason) }
+  const card=$("cueCard");
+  card.className="cue-card "+v.cls;
+  $("cueVerdict").textContent=v.label;
+  $("cueVerdict").removeAttribute("style");
+  $("cueHeadline").textContent=d.headline||"";
+  $("cueDetail").textContent=d.detail||"";
+  $("cueBadge").innerHTML=badge(mock);
+  $("cueMeta").textContent= mock ? "モック" : (VIEW==="demo" ? `${(ms/1000).toFixed(1)}s` : `${model} / ${(ms/1000).toFixed(1)}s`);
+  // 切り返し
+  const cb=$("counterBox");
+  if(d.verdict==="retreat" && d.counter_move){
+    cb.className="counter-box retreat";
+    cb.innerHTML=`<div class="sig">撤退サイン：反応がいまいち。無理に引っ張らない</div><div style="margin-top:3px">かけ直し提案: ${esc(d.counter_move)}</div>`;
+  }else if(d.verdict==="exit_signal" && d.counter_move){
+    cb.className="counter-box";
+    cb.classList.remove("hidden");
+    cb.innerHTML=`<div class="sig">${interviewMode()?"懸念シグナル":"離脱シグナル"}: ${esc(d.exit_signal)}</div><div style="margin-top:3px">${interviewMode()?"問い直し例":"切り返し例"}: ${esc(d.counter_move)}</div>`;
+  }else{ cb.classList.add("hidden"); cb.innerHTML="" }
+  // 面接モード: 適用中の分岐（候補者タイプ／併願先）をチップ表示し、プレイブック側の該当カードを点灯
+  const bch=$("branchChip");
+  if(bch){ const b=(interviewMode()&&d.branch)?String(d.branch).trim():""; bch.textContent=b?("分岐: "+b):""; bch.classList.toggle("hidden",!b); renderPlaybook(b) }
+  // 質問候補
+  $("qList").innerHTML=(d.questions||[]).slice(0,3).map(q=>`<div class="q-item">${esc(q)}</div>`).join("");
+  // チェックリスト（圧縮形式 {i,s,n} と旧形式 {item,status,note} の両対応）
+  const icon={filled:"✓", partial:"△", missing:"—"};
+  const itemNames=checklistItems();
+  const list=(d.checklist||[]).map(c=> c.item!==undefined ? {...c, ask:c.ask||""} : {
+    item: itemNames[c.i] ?? ("項目"+((c.i??0)+1)),
+    status: ({f:"filled",p:"partial",m:"missing"})[c.s]||"missing",
+    note: c.n||"", ask: c.q||""
+  });
+  // 充足のラチェット: 一度上がった判定は巻き戻さない（判定窓の外に根拠が流れた際の「緑→黄戻り」対策）
+  if(!mock && state.lastChecklist && state.lastChecklist.length){
+    const rank={missing:0,partial:1,filled:2};
+    const prev=new Map(state.lastChecklist.map(c=>[c.item,c]));
+    for(let ix=0; ix<list.length; ix++){
+      const p=prev.get(list[ix].item);
+      if(p && rank[p.status]>rank[list[ix].status]) list[ix]={...p};
+    }
+  }
+  const nameOf=s=>{ const ix=s.search(/[:：]/); return ix>0 ? s.slice(0,ix) : s };  // 「ラベル: 説明」は見出しだけ大きく
+  $("checkBody").innerHTML=list.map(c=>
+    `<div class="check-item st-${esc(c.status)}"><span class="ic">${icon[c.status]||"—"}</span><div><div class="nm">${esc(nameOf(c.item))}</div>${c.note?`<div class="note">${esc(c.note)}</div>`:""}${c.ask?`<div class="ask">追加質問: ${esc(c.ask)}</div>`:""}</div></div>`
+  ).join("") || '<div class="check-note">—</div>';
+  renderCoverage(list);
+  if(!mock){ state.lastChecklist=list; state.cueHist.push({t:Math.round(elapsed()), v:v.label, h:d.headline||""}) }  // セッション保存用
+  // 履歴
+  const log=$("cueLog");
+  log.style.display="block";
+  log.insertAdjacentHTML("afterbegin",
+    `<div class="row"><span class="t">${fmtT(elapsed())}</span><span class="v">${v.label}</span><span>${esc(d.headline||"")}</span></div>`);
+}
+
+// ---------- 面接プレイブック（テンプレートの playbook を静的表示。判定の branch で該当カードを点灯） ----------
+state.activeBranch=""; state.pbTab="types";
+function renderPlaybook(active){
+  const el=$("pbBody"); if(!el) return;
+  const pb=tplMeta().playbook||{}; state.activeBranch=active||"";
+  const tab=state.pbTab||"types";
+  document.querySelectorAll("#pbTabs button").forEach(b=>b.classList.toggle("active", b.dataset.pb===tab));
+  // 一覧の項目（名前・ヒント）と詳細の描画関数をタブごとに用意
+  let items=[];
+  if(tab==="types") items=(pb.types||[]).map(t=>({name:t.name, hint:(t.signals||[])[0]||"", cols:[["見分け方",t.signals],["やること",t.do],["言い回し",t.say,true]]}));
+  else if(tab==="rivals") items=(pb.rivals||[]).map(r=>({name:r.name, hint:(r.ask||[])[0]||"", cols:[["聞くこと",r.ask],["差別化の語り",r.say,true]]}));
+  else items=(pb.attract||[]).map(a=>({name:a.topic, hint:String(a.say||"").slice(0,40), text:a.say}));
+  if(!items.length){ el.innerHTML='<div class="check-note">このテンプレートには分岐ガイドがありません</div>'; return }
+  // 選択: 判定で該当した分岐があればそれ、なければ前回の選択、なければ先頭
+  const names=items.map(x=>x.name);
+  let sel = names.includes(state.activeBranch) ? state.activeBranch : (names.includes(state.pbSel||"") ? state.pbSel : names[0]);
+  state.pbSel=sel;
+  const list=items.map(x=>`<div class="pb-item${x.name===sel?" sel":""}${x.name===state.activeBranch?" on":""}" data-name="${esc(x.name)}"><div class="nm">${esc(x.name)}${x.name===state.activeBranch?'<span class="live">いま該当</span>':""}</div>${x.hint?`<div class="hint">${esc(x.hint)}</div>`:""}</div>`).join("");
+  const cur=items.find(x=>x.name===sel);
+  let detail="";
+  if(cur.text!==undefined){
+    detail=`<div class="pb-title">${esc(cur.name)}</div><p class="say-p">${esc(cur.text)}</p>`;
+  }else{
+    const cols=cur.cols.filter(c=>(c[1]||[]).length).map(c=>`<div class="pb-col"><div class="pb-sec">${esc(c[0])}</div><ul class="${c[2]?"say":""}">${(c[1]||[]).map(v=>`<li>${esc(v)}</li>`).join("")}</ul></div>`).join("");
+    detail=`<div class="pb-title">${esc(cur.name)}${cur.name===state.activeBranch?'<span class="live" style="font-size:11px;font-weight:700;color:#5B12C9;background:#EFE6FD;border-radius:999px;padding:1px 8px">判定で該当中</span>':""}</div><div class="pb-cols" style="grid-template-columns:${cur.cols.length===2?"1fr 1.4fr":"1fr 1fr 1.25fr"}">${cols}</div>`;
+  }
+  el.innerHTML=`<div class="pb-list">${list}</div><div class="pb-detail">${detail}</div>`;
+  el.querySelectorAll(".pb-item").forEach(d=>{ d.onclick=()=>{ state.pbSel=d.dataset.name; renderPlaybook(state.activeBranch) } });
+  if($("pbMeta")) $("pbMeta").textContent = state.activeBranch ? `いまの分岐: ${state.activeBranch}` : "";
+}
+document.querySelectorAll("#pbTabs button").forEach(b=>{ b.onclick=()=>{ state.pbTab=b.dataset.pb; renderPlaybook(state.activeBranch) } });
+function renderCoverage(list){
+  const total=checklistItems().length || (list||[]).length;
+  if(!total){ $("covBar").innerHTML='<div class="check-note">テンプレートに確認項目がありません</div>'; return }
+  const f=(list||[]).filter(c=>c.status==="filled").length;
+  const p=(list||[]).filter(c=>c.status==="partial").length;
+  const m=Math.max(0, total-f-p);
+  const seg=(n,color)=> n?`<div style="flex:${n};background:${color}"></div>`:"";
+  $("covBar").innerHTML=
+    `<div class="cov-track">${seg(f,"var(--ok)")}${seg(p,"#E5A100")}${seg(m,"#E7E3F0")}</div>`+
+    `<div class="cov-text">確認済み ${f} ・ 一部 ${p} ・ 未確認 ${m}（全${total}項目）</div>`;
+}
+renderCoverage([]);
+
+// ---------- マイク選択 ----------
+async function refreshMics(){
+  if(!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices)) return;
+  try{
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const mics=devs.filter(d=>d.kind==="audioinput" && d.deviceId && d.deviceId!=="default" && d.deviceId!=="communications");
+    const sel=$("micSel"), cur=sel.value;
+    sel.innerHTML='<option value="">既定のマイク</option>';
+    mics.forEach((d,i)=>{
+      const o=document.createElement("option");
+      o.value=d.deviceId;
+      o.textContent=d.label || `マイク ${i+1}`;
+      sel.appendChild(o);
+    });
+    const want = cur || state.savedMic || "";
+    if(want && [...sel.options].some(o=>o.value===want)) sel.value=want;
+  }catch(_){/* 列挙不可の環境では既定のみ */}
+}
+$("micSel").onchange=()=>{
+  if(state.live) $("recHint").textContent="マイクの変更は、いったん停止して次の開始から反映されます。";
+};
+if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
+  navigator.mediaDevices.addEventListener("devicechange", refreshMics);
+}
+refreshMics();
+
+// ---------- 会議タブの音声（Zoom/Teamsのブラウザ会議タブを共有して相手の声を取り込む） ----------
+function setTabChip(){
+  const on=!!(state.tabStream && state.tabStream.getAudioTracks().some(t=>t.readyState==="live"));
+  const surf=({browser:"（会議タブ）", monitor:"（画面全体）", window:"（ウィンドウ）"})[state.tabSurface]||"";
+  $("tabAudioChip").className="tab-chip"+(on?" on":"");
+  $("tabAudioChip").textContent=on?"取り込み中"+surf:"未接続";
+  $("tabAudioBtn").textContent=on?"会議の音声を解除":"会議の音声を取り込む";
+}
+$("tabAudioBtn").onclick=async ()=>{
+  if(state.tabStream){ releaseTabAudio("会議音声の取り込みを解除しました。マイクのみで動作します。"); return }
+  let ds;
+  try{
+    // タブ共有（会議がブラウザの場合）と画面全体＋システム音声（Zoom/Teamsがデスクトップアプリの場合）の両対応
+    ds=await navigator.mediaDevices.getDisplayMedia({
+      video:true, audio:true,
+      selfBrowserSurface:"exclude", systemAudio:"include"
+    });
+  }catch(e){
+    if(e && (e.name==="NotAllowedError"||e.name==="AbortError")) return;  // ユーザーがキャンセル
+    showErr("会議音声の取り込みを開始できませんでした: "+(e.message||e.name));
+    return;
+  }
+  if(!ds.getAudioTracks().length){
+    ds.getTracks().forEach(t=>t.stop());
+    showErr("選んだ共有に音声が含まれていません。\n・会議がブラウザの場合: 「Chromeタブ」を選び「タブの音声も共有する」をON\n・会議がZoom/Teamsのデスクトップアプリの場合: 「画面全体」を選び「システム音声も共有」をON\n（「システム音声も共有」が表示されない場合、このChrome/OSの組み合わせでは画面全体の音声取得が未対応です。会議をブラウザで開き直してタブ共有を使ってください）");
+    return;
+  }
+  clearErr();
+  state.tabStream=ds;
+  const vs=ds.getVideoTracks()[0];
+  state.tabSurface=(vs && vs.getSettings && vs.getSettings().displaySurface)||"";  // browser=タブ / monitor=画面全体
+  // Chromeの「共有を停止」バーなどで共有が終わったら自動でマイクのみに戻す
+  ds.getAudioTracks()[0].addEventListener("ended",()=>{ releaseTabAudio("会議タブの共有が終了したため、マイクのみに戻りました。") });
+  if(state.live && state.ctx) plugTabIntoGraph();  // 実行中ならその場で合流
+  setTabChip();
+  wslog("会議音声の取り込み開始 surface="+(state.tabSurface||"?")+(state.live?"（実行中に合流）":""));
+  if(state.tabSurface==="monitor") wslog("画面全体＋システム音声モード: 通知音なども書き起こしに混ざるため、会議中はMacの通知をオフ推奨");
+  if(!state.live && !state.mock) $("recHint").textContent="会議の音声を取り込みました。ヘッドホンを着けたまま、赤いボタンで開始してください。";
+};
+function releaseTabAudio(msg){
+  if(state.tabSrcNode){ try{state.tabSrcNode.disconnect()}catch(_){} state.tabSrcNode=null }
+  if(state.tabStream){ state.tabStream.getTracks().forEach(t=>{ try{t.stop()}catch(_){} }); state.tabStream=null }
+  state.tabAnalyser=null; state.tabSurface="";
+  setTabChip();
+  if(msg){ wslog("会議タブ: "+msg); if(!state.live && !state.mock) $("recHint").textContent=msg }
+}
+function plugTabIntoGraph(){
+  if(!state.ctx || !state.mixBus || !state.tabStream || state.tabSrcNode) return;
+  try{
+    state.tabSrcNode=state.ctx.createMediaStreamSource(state.tabStream);
+    state.tabAnalyser=state.ctx.createAnalyser(); state.tabAnalyser.fftSize=512;
+    state.tabSrcNode.connect(state.tabAnalyser);
+    state.tabSrcNode.connect(state.mixBus);
+  }catch(e){ wslog("会議タブの合流に失敗: "+e.message) }
+}
+// 発言の帰属推定: 音源別（マイク/タブ）のレベル履歴から、発話ウィンドウ内で優勢な方を話者とみなす
+function attributeSpeaker(){
+  if(!state.tabAnalyser) return null;  // タブ取り込みなし→ラベルなし（従来どおり文脈推定に任せる）
+  const t1=Date.now(), t0=(state.uttStartAt||t1-5000)-200;
+  let mic=0, tab=0;
+  for(const s of state.srcLog){ if(s.t>=t0 && s.t<=t1){ mic+=Math.max(0,s.mic-0.015); tab+=Math.max(0,s.tab-0.015) } }
+  if(mic+tab<0.05) return null;
+  if(mic>tab*1.5) return "me";
+  if(tab>mic*1.5) return "peer";
+  return null;  // 拮抗（同時発話など）は無理に付けない
+}
+
+// ---------- 音声パイプライン（メーター共通・realtimeはWS送信） ----------
+const WORKLET_SRC = `
+class PcmCapture extends AudioWorkletProcessor{
+  process(inputs){
+    const ch = inputs[0] && inputs[0][0];
+    if(ch) this.port.postMessage(ch.slice(0));
+    return true;
+  }
+}
+registerProcessor("pcm-capture", PcmCapture);`;
+
+let floatQ=[]; let floatQLen=0;
+function onPcm(chunk){
+  // メーター
+  let peak=0; for(let i=0;i<chunk.length;i++){const a=Math.abs(chunk[i]); if(a>peak)peak=a}
+  drawMeter(peak);
+  if(peak>state.chunkPeak) state.chunkPeak=peak;
+  if(peak>state.maxPeak) state.maxPeak=peak;
+  // ストリーミング送信用に蓄積（OpenAI=24kHz / ElevenLabs=16kHz）
+  const mode=$("modeSel").value;
+  let sink=null;
+  if(mode==="realtime" && state.ws && state.ws.readyState===1) sink="oa";
+  else if(mode==="scribe" && state.elWs && state.elWs.readyState===1) sink="el";
+  if(!sink) return;
+  floatQ.push(chunk); floatQLen+=chunk.length;
+  const inRate = state.ctx.sampleRate;
+  if(floatQLen >= inRate*0.1){ // 100msごと
+    const buf=new Float32Array(floatQLen); let off=0;
+    for(const c of floatQ){ buf.set(c,off); off+=c.length }
+    floatQ=[]; floatQLen=0;
+    if(sink==="oa"){
+      state.ws.send(JSON.stringify({type:"input_audio_buffer.append", audio: b64FromInt16(resamplePcm(buf, inRate, 24000))}));
+    }else{
+      state.elWs.send(JSON.stringify({message_type:"input_audio_chunk", audio_base_64: b64FromInt16(resamplePcm(buf, inRate, 16000)), sample_rate:16000}));
+    }
+  }
+}
+function resamplePcm(f32, inRate, outRate){
+  const outLen = Math.round(f32.length*outRate/inRate);
+  const out = new Int16Array(outLen);
+  for(let i=0;i<outLen;i++){
+    const pos=i*inRate/outRate, i0=Math.floor(pos), i1=Math.min(i0+1,f32.length-1), fr=pos-i0;
+    let v=f32[i0]*(1-fr)+f32[i1]*fr;
+    v=Math.max(-1,Math.min(1,v));
+    out[i]=v<0 ? v*0x8000 : v*0x7FFF;
+  }
+  return out;
+}
+function b64FromInt16(int16){
+  const bytes=new Uint8Array(int16.buffer);
+  let bin=""; const CH=0x8000;
+  for(let i=0;i<bytes.length;i+=CH) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
+  return btoa(bin);
+}
+let meterPctAt=0;
+function drawMeter(peak){
+  const cv=$("meter"), g=cv.getContext("2d");
+  g.clearRect(0,0,cv.width,cv.height);
+  g.fillStyle = peak<0.02 ? "#C0334D" : "#7724EB";  // ほぼ無音のときは赤
+  g.fillRect(0,5,Math.max(3,peak*cv.width),12);
+  const now=Date.now();
+  if(now-meterPctAt>250){
+    meterPctAt=now;
+    const el=$("meterPct");
+    if(el) el.textContent="入力レベル: "+Math.round(peak*100)+"%"+(peak<0.02?"（低すぎ）":"");
+  }
+}
+
+// ---------- Realtime API（WebSocket） ----------
+function wslog(msg){
+  const t=new Date().toTimeString().slice(0,8);
+  console.log("[navi-ws] "+t+" "+msg);
+  const box=$("connLog"), el=$("connLogBody");
+  if(el){
+    // デモ画面（ビデオ用）では通常は接続ログを出さないが、エラー系の記録が出たときだけ現れる
+    if(VIEW!=="demo" || /エラー|失敗|警告|自動切替/.test(msg)) box.style.display="block";
+    el.insertAdjacentHTML("beforeend", `<div>[${t}] ${esc(msg)}</div>`);
+    el.scrollTop=el.scrollHeight;
+  }
+}
+// GA形式（2025-08以降の正式版）とbeta形式の両対応。最初に届くcreatedイベントで判別する
+// 書き起こしの言語アンカー（他言語ハルシネーション対策）。将来の用語辞書もここに足す
+const STT_PROMPT="日本語のビジネス会議・商談の会話です。すべて日本語で書き起こしてください。";
+// 会議モードは無音0.7秒で区切る（長め＝断片化を防ぎ他言語化と誤認識を減らす）。営業モードはカンペ即時性優先で0.4秒
+function vadSilenceMs(){ return meetingMode()?700:400 }
+// 集音モード: near=近接マイク向けノイズ抑制（1人・ヘッドセット） / far=遠くの声も残す（複数人・スピーカーフォン）
+function pickupMode(){ return ($("pickupSel")&&$("pickupSel").value)||"near" }
+function noiseReductionType(){ return pickupMode()==="far" ? "far_field" : "near_field" }
+function vadThreshold(){ return pickupMode()==="far" ? 0.25 : 0.35 }  // 遠い声は小さいので検知を敏感に
+function gaUpdatePayload(){
+  const model=sttModel();
+  const live=/live-transcribe/.test(model);
+  const tr={model, language:"ja", prompt:STT_PROMPT};
+  // live-transcribe系は遅延チューニング対応（minimal/low/medium/high/xhigh）。カンペ即時性優先でlow
+  if(live) tr.delay="low";
+  const input={
+    format:{type:"audio/pcm", rate:24000},
+    noise_reduction:{type:noiseReductionType()},
+    transcription:tr
+  };
+  // live-transcribe系はターン検知を内蔵（delayで調整）しており、turn_detection指定は非対応（実機で確認）
+  if(!live) input.turn_detection={type:"server_vad", threshold:vadThreshold(), prefix_padding_ms:300, silence_duration_ms:vadSilenceMs()};
+  return {type:"session.update", session:{type:"transcription", audio:{input}}};
+}
+function betaUpdatePayload(){
+  return {type:"transcription_session.update", session:{
+    input_audio_format:"pcm16",
+    input_audio_transcription:{model:sttModel(), language:"ja", prompt:STT_PROMPT},
+    turn_detection:{type:"server_vad", threshold:vadThreshold(), prefix_padding_ms:300, silence_duration_ms:vadSilenceMs()},
+    input_audio_noise_reduction:{type:noiseReductionType()}
+  }};
+}
+function connectWS(){
+  return new Promise((resolve,reject)=>{
+    let opened=false, configured=false, cfgTimer=null, usedGa=true, tdRetried=false;
+    const ws = new WebSocket("wss://api.openai.com/v1/realtime?intent=transcription",
+      ["realtime","openai-insecure-api-key."+state.key]);
+    const sock=ws;
+    const configure=(ga,why)=>{
+      if(configured) return;
+      configured=true; usedGa=ga; clearTimeout(cfgTimer);
+      wslog(`設定送信（${ga?"GA":"beta"}形式・${why}）: model=${sttModel()}`);
+      ws.send(JSON.stringify(ga?gaUpdatePayload():betaUpdatePayload()));
+    };
+    ws.onopen=()=>{
+      opened=true;
+      wslog("WebSocket接続OK。開始イベント待ち…");
+      cfgTimer=setTimeout(()=>configure(true,"開始イベント未受信のため推定"), 2500);
+      resolve(ws);
+    };
+    ws.onmessage=ev=>{
+      let m; try{ m=JSON.parse(ev.data) }catch(_){ return }
+      if(m.type==="session.created"){ configure(true,"session.created受信");
+      }else if(m.type==="transcription_session.created"){ configure(false,"transcription_session.created受信");
+      }else if(m.type==="session.updated"||m.type==="transcription_session.updated"){ wslog("設定完了: "+m.type);
+      }else if(m.type==="conversation.item.input_audio_transcription.delta"){
+        if(!state.interim && (m.delta||"")) state.uttStartAt=Date.now();  // 話者推定用の発話開始時刻
+        state.interim+=(m.delta||""); renderTranscript(); armSoftCommit(); maybeMidJudge();
+      }else if(m.type==="conversation.item.input_audio_transcription.completed"){
+        state.wsRetries=0;
+        clearTimeout(state.softTimer);
+        if(isDupOfSoftCommit(m.transcript)){ state.lastSoft=null; state.interim=""; renderTranscript(); }
+        else addUtt(m.transcript);
+      }else if(m.type==="error"){
+        const msg=(m.error&&m.error.message)||JSON.stringify(m);
+        // モデルがターン検知非対応の場合は、VAD指定を外した設定を自動で送り直して復旧
+        if(/turn detection is not supported/i.test(msg) && !tdRetried){
+          tdRetried=true;
+          wslog("APIエラー「turn_detection非対応」→VAD指定を外して設定を再送");
+          const p = usedGa ? gaUpdatePayload() : betaUpdatePayload();
+          if(p.session.audio && p.session.audio.input) delete p.session.audio.input.turn_detection;
+          delete p.session.turn_detection;
+          ws.send(JSON.stringify(p));
+          return;
+        }
+        state.lastWsErr=msg;
+        wslog("APIエラーイベント: "+msg);
+        showErr("Realtime APIエラー: "+msg);
+      }else if(!/^input_audio_buffer\.|^conversation\.item\.(created|added|done)/.test(m.type)){
+        wslog("受信: "+m.type);
+      }
+    };
+    ws.onclose=e=>{
+      clearTimeout(cfgTimer);
+      wslog(`切断 code=${e.code}${e.reason?(" reason="+e.reason):""}`);
+      if(!opened){
+        reject(new Error(`Realtime APIに接続できませんでした（code ${e.code}）。キーを確認するか、接続方式を「5秒区切り送信」に切り替えてお試しください。`));
+        return;
+      }
+      if(sock!==state.ws || !state.live) return; // 意図的な停止・古い接続は無視
+      handleWSDrop(e);
+    };
+  });
+}
+async function handleWSDrop(e){
+  state.ws=null;
+  // code 3000 = API側の明示エラー（キー・権限・モデル等）。再接続しても同じ結果なので即フォールバック
+  const fatal = e.code===3000;
+  if(!fatal && state.wsRetries<2){
+    state.wsRetries++;
+    showErr(`Realtime接続が切れました（code ${e.code}）。再接続しています…（${state.wsRetries}/2回目）`);
+    try{
+      state.ws=await connectWS();
+      clearErr(); wslog("再接続成功");
+      return;
+    }catch(err){ wslog("再接続失敗: "+err.message) }
+  }
+  // 区切り送信モードへ自動切替（音声パイプラインはそのまま流用）
+  $("modeSel").value="chunk";
+  $("trMeta").textContent=modeLabel("chunk");
+  wslog("「5秒区切り送信」モードに自動切替");
+  showErr("リアルタイム接続が使えないため、「5秒区切り送信」に自動で切り替えました。書き起こしは5〜7秒遅れで続きます。"
+    +(state.lastWsErr?`\n直前のエラー: ${state.lastWsErr}`:"")
+    +"\n原因調査には左パネル下の「接続ログ」を共有してください。");
+  startChunkLoop();
+}
+
+// ---------- ElevenLabs Scribe v2（リアルタイム） ----------
+async function getScribeToken(){
+  // 単発トークン方式（15分有効・使い切り）: キー本体をWebSocketのURLに載せないため
+  const r=await fetch("https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
+    {method:"POST", headers:{"xi-api-key":state.elKey}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(`ElevenLabsトークン発行に失敗（HTTP ${r.status}）`+(j.detail?": "+JSON.stringify(j.detail).slice(0,180):""));
+  if(!j.token) throw new Error("ElevenLabsトークン発行の応答にtokenが含まれていません");
+  return j.token;
+}
+function connectScribe(token){
+  return new Promise((resolve,reject)=>{
+    let opened=false;
+    const qs=new URLSearchParams({
+      model_id:"scribe_v2_realtime", audio_format:"pcm_16000",
+      language_code:"ja", commit_strategy:"vad", token
+    });
+    const ws=new WebSocket("wss://api.elevenlabs.io/v1/speech-to-text/realtime?"+qs.toString());
+    const sock=ws;
+    ws.onopen=()=>{ opened=true; wslog("EL: WebSocket接続OK（セッション開始待ち）"); resolve(ws) };
+    ws.onmessage=ev=>{
+      let m; try{ m=JSON.parse(ev.data) }catch(_){ return }
+      if(m.message_type==="session_started"){ wslog("EL: セッション開始 model="+((m.config&&m.config.model_id)||"?"));
+      }else if(m.message_type==="partial_transcript"){
+        if(!state.interim && (m.text||"")) state.uttStartAt=Date.now();
+        state.interim=m.text||""; renderTranscript(); armSoftCommit(); maybeMidJudge();   // partialは全文置き換え（OpenAIのdelta追記と違う）
+      }else if(m.message_type==="committed_transcript"){
+        state.elRetries=0;
+        clearTimeout(state.softTimer);
+        if(isDupOfSoftCommit(m.text)){ state.lastSoft=null; state.interim=""; renderTranscript(); }
+        else { state.interim=""; addUtt(m.text); }
+      }else if(m.message_type==="warning"){ wslog("EL: warning "+(m.warning||""));
+      }else if(/error|quota|rate_limited|exceeded|overflow|exhausted|unaccepted|invalid|throttled/.test(m.message_type||"")){
+        const msg=(m.error||m.message_type);
+        state.lastWsErr="EL: "+msg;
+        wslog("EL: エラーイベント "+m.message_type+": "+(m.error||""));
+        showErr("ElevenLabs Scribeエラー: "+msg);
+      }
+    };
+    ws.onclose=e=>{
+      wslog(`EL: 切断 code=${e.code}${e.reason?(" reason="+e.reason):""}`);
+      if(!opened){ reject(new Error(`ElevenLabs Scribeに接続できませんでした（code ${e.code}）。ELキーを確認してください。`)); return }
+      if(sock!==state.elWs || !state.live) return;
+      handleScribeDrop();
+    };
+  });
+}
+async function handleScribeDrop(){
+  state.elWs=null;
+  if(state.elRetries<2){
+    state.elRetries++;
+    showErr(`Scribe接続が切れました。再接続しています…（${state.elRetries}/2回目）`);
+    try{
+      state.elWs=await connectScribe(await getScribeToken());
+      clearErr(); wslog("EL: 再接続成功");
+      return;
+    }catch(err){ wslog("EL: 再接続失敗: "+err.message) }
+  }
+  if(state.key){
+    $("modeSel").value="chunk"; updateModeUI();
+    $("trMeta").textContent=modeLabel("chunk");
+    wslog("EL: OpenAI「5秒区切り送信」へ自動切替");
+    showErr("Scribe接続が不安定なため、OpenAIの「5秒区切り送信」に自動で切り替えました。"
+      +(state.lastWsErr?`\n直前のエラー: ${state.lastWsErr}`:"")
+      +"\n原因調査には左パネル下の「接続ログ」を共有してください。");
+    startChunkLoop();
+  }else{
+    showErr("Scribe接続が切れ、再接続にも失敗しました。もう一度開始してください。詳細は「接続ログ」を参照。");
+    stopLive();
+  }
+}
+
+// ---------- 5秒区切り送信（保険モード） ----------
+function startChunkLoop(){
+  if(!state.stream) return;
+  const mime=["audio/webm;codecs=opus","audio/webm","audio/mp4"].find(m=>MediaRecorder.isTypeSupported(m))||"";
+  const cycle=()=>{
+    if(!state.live || !state.stream) return;
+    const srcStream = state.mixDest ? state.mixDest.stream : state.stream;  // タブ音声込みのミックスを録る
+    const rec=new MediaRecorder(srcStream, mime?{mimeType:mime}:{});
+    const chunks=[];
+    rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data) };
+    rec.onstop=()=>{
+      const blob=new Blob(chunks,{type:rec.mimeType||"audio/webm"});
+      const peak=state.chunkPeak; state.chunkPeak=0;
+      if(state.live) cycle();
+      if(peak>0.015 && blob.size>2500){
+        state.chunkQ = state.chunkQ.then(()=>transcribeChunk(blob)).catch(()=>{});
+      }
+    };
+    rec.start();
+    state.chunkRec=rec;
+    state.chunkTimerId=setTimeout(()=>{ if(rec.state==="recording") rec.stop() }, 5000);
+  };
+  cycle();
+}
+async function transcribeChunk(blob){
+  const fd=new FormData();
+  const ext=(blob.type||"").includes("mp4")?"m4a":"webm";
+  fd.append("file", blob, "chunk."+ext);
+  fd.append("model", sttModel());
+  fd.append("language","ja");
+  const ctxText=state.utts.slice(-3).map(u=>u.text).join(" ");
+  fd.append("prompt", (STT_PROMPT+" "+ctxText).slice(-400));  // 言語アンカー＋直近の文脈
+  const r=await fetch("https://api.openai.com/v1/audio/transcriptions",{method:"POST",headers:{Authorization:"Bearer "+state.key},body:fd});
+  const j=await r.json();
+  if(j.error){ showErr("書き起こしに失敗: "+(j.error.message||"")); return }
+  if(j.text && j.text.trim()) addUtt(j.text.trim());
+}
+
+// ---------- 開始 / 停止 ----------
+$("recBtn").onclick=async ()=>{
+  if(state.live){ stopLive(); return }
+  if(state.mock){ stopMock() }
+  const mode=$("modeSel").value;
+  const setupHint = VIEW==="demo" ? "「設定」タブでキーを設定してください（設定はこの画面に自動反映されます）。" : "";
+  if(mode==="scribe"){
+    if(!state.elKey){ showErr(setupHint || "Scribeで書き起こすには、先にElevenLabsキーを設定してください。"); return }
+  }else if(!state.key){
+    showErr(setupHint || "先にOpenAI APIキーを設定してください。キーなしで流れを見るには「モック会話を再生」を使えます。");
+    return;
+  }
+  clearErr();
+  try{
+    // echoCancellationは必ずOFF: このデモは音を再生しないため不要で、ONだと同じMacの
+    // スピーカーから流した音源（デモ用mp3等）が「エコー」として消され、無音同然になる
+    const audioC={echoCancellation:false, noiseSuppression:false, autoGainControl:true};
+    if($("micSel").value) audioC.deviceId={exact:$("micSel").value};
+    state.stream = await navigator.mediaDevices.getUserMedia({audio:audioC});
+    refreshMics(); // 許可後はデバイス名が取れるので表示を実名に更新
+  }catch(e){
+    if(e.name==="OverconstrainedError" || e.name==="NotFoundError"){
+      showErr("選択したマイクが見つかりませんでした（抜き差しした可能性）。マイク選択を「既定のマイク」に戻して試してください。");
+      refreshMics();
+    }else{
+      showErr("マイクを使えませんでした: "+e.message);
+    }
+    return;
+  }
+  try{
+    state.ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const blobURL = URL.createObjectURL(new Blob([WORKLET_SRC],{type:"text/javascript"}));
+    await state.ctx.audioWorklet.addModule(blobURL);
+    const src = state.ctx.createMediaStreamSource(state.stream);
+    state.worklet = new AudioWorkletNode(state.ctx,"pcm-capture");
+    state.worklet.port.onmessage = e=>onPcm(e.data);
+    // ミックスバス: マイク＋（あれば）会議タブ音声 → 書き起こしへ1本で送る
+    state.mixBus = state.ctx.createGain(); state.mixBus.gain.value=1;
+    state.micAnalyser = state.ctx.createAnalyser(); state.micAnalyser.fftSize=512;
+    src.connect(state.micAnalyser);
+    src.connect(state.mixBus);
+    state.mixBus.connect(state.worklet);
+    state.mixDest = state.ctx.createMediaStreamDestination();  // 5秒区切りモードもタブ音声込みで録れるように
+    state.mixBus.connect(state.mixDest);
+    if(state.tabStream) plugTabIntoGraph();
+    const mute = state.ctx.createGain(); mute.gain.value=0;
+    state.worklet.connect(mute); mute.connect(state.ctx.destination);
+    // 話者推定用: 音源別レベルを120msごとに記録（直近約60秒）
+    state.srcLog=[]; state.uttStartAt=0;
+    const srcPeak=an=>{ if(!an) return 0; const b=new Float32Array(an.fftSize); an.getFloatTimeDomainData(b); let p=0; for(let i=0;i<b.length;i++){const a=Math.abs(b[i]); if(a>p)p=a} return p };
+    state.srcLvlId=setInterval(()=>{
+      state.srcLog.push({t:Date.now(), mic:srcPeak(state.micAnalyser), tab:srcPeak(state.tabAnalyser)});
+      if(state.srcLog.length>500) state.srcLog.splice(0, state.srcLog.length-500);
+    },120);
+  }catch(e){
+    showErr("音声処理の初期化に失敗しました: "+e.message);
+    cleanupAudio(); return;
+  }
+  state.wsRetries=0; state.elRetries=0;
+  if(mode==="realtime"){
+    try{ state.ws = await connectWS() }
+    catch(e){ showErr(e.message); cleanupAudio(); return }
+  }else if(mode==="scribe"){
+    try{ state.elWs = await connectScribe(await getScribeToken()) }
+    catch(e){ showErr(e.message); cleanupAudio(); return }
+  }
+  state.live=true;
+  const resume=state.resumeData; state.resumeData=null;
+  if(resume){
+    // 過去セッションの再開: 復元済みの会話・判定資産を維持し、時計と保存先を引き継いで継ぎ足す
+    state.t0=Date.now()-(resume.sec||0)*1000;
+    state.sessId=resume.id; state.sessAt=resume.at;
+    state.interim=""; state.lastCueAt=0; state.lastCuedCount=state.utts.length;
+    state.treeLastUttCount=state.utts.length;   // 各レーンは再開後の新しい発話だけを差分処理
+    state.skillLastUttCount=state.utts.length;
+    state.knowLastUttCount=state.utts.length;
+    state.memoUttCount=state.utts.length;
+    state.forceMemo=false;
+    wslog(`セッション再開: ${state.utts.length}発話・${fmtT(resume.sec||0)}から継ぎ足し`);
+  }else{
+    state.t0=Date.now();
+    state.utts=[]; state.interim=""; state.lastCueAt=0; state.lastCuedCount=0;
+    state.sessId="s"+Date.now(); state.sessAt=new Date().toISOString();  // セッション履歴の保存単位
+    state.cueHist=[]; state.lastChecklist=null; state.forceMemo=false;
+    resetTree();
+    resetSkill();
+    resetKnow();
+  }
+  clearInterval(state.treeTimerId);
+  state.treeTimerId=setInterval(runTree, 45000);  // トピックツリーは45秒ごとに差分更新
+  clearInterval(state.skillTimerId);
+  if((tplMeta().skillChecks||[]).length) state.skillTimerId=setInterval(runSkill, 25000);  // ロープレチェックは25秒ごと
+  clearInterval(state.knowTimerId);
+  state.knowTimerId=setInterval(runKnow, 30000);  // ナレッジレーンは30秒ごと
+  state.follow=true; $("jumpBtn").classList.add("hidden");
+  renderTranscript();
+  if(!resume) renderCoverage([]);
+  $("trBadge").innerHTML=badge(false);
+  $("trMeta").textContent = modeLabel(mode);
+  $("recBtn").classList.add("rec");
+  $("recHint").textContent="実行中… もう一度クリックで停止。"+(mode==="scribe"&&!state.key?"（OpenAIキー未設定のため書き起こしのみ・カンペ判定は出ません）":"");
+  state.timerId=setInterval(()=>{
+    $("timer").textContent=fmtT(elapsed());
+    $("timerMini").textContent=fmtT(elapsed());
+    // 会議モード: 次の要約までのカウントダウンを表示（判定中はスピナー優先）
+    if(meetingMode() && state.live && !state.cueBusy && state.nextSumAt)
+      $("cueMeta").textContent="次の要約まで "+fmtT(Math.max(0,(state.nextSumAt-Date.now())/1000));
+  },300);
+  state.maxPeak=0; state.lvlWarned=false;
+  state.lvlId=setInterval(checkInputLevel, 5000);
+  // 構造化メモは全モードでsummaryMin分ごとに自動更新（会議モードは要約カンペも同じタイマーで）
+  clearInterval(state.sumTimerId); state.nextSumAt=0;
+  if(!resume) resetMemo();  // 再開時は前回までのメモを土台に継ぎ足す（引き継ぎモード）
+  startSumTimer();
+  updateRunButtons();
+  if(mode==="chunk") startChunkLoop();
+  // 発話が続いている間の定期判定（完了イベント逃しの保険。会議モードはタイマー駆動なので対象外）
+  state.watchdogId=setInterval(()=>{
+    if(!meetingMode() && state.utts.length>state.lastCuedCount) scheduleCue();
+  },12000);
+};
+
+function cleanupAudio(){
+  clearInterval(state.srcLvlId); state.srcLvlId=null;
+  if(state.tabSrcNode){ try{state.tabSrcNode.disconnect()}catch(_){} state.tabSrcNode=null }  // tabStream自体は保持（次の開始で再合流）
+  state.micAnalyser=null; state.tabAnalyser=null; state.mixBus=null; state.mixDest=null;
+  if(state.worklet){ try{state.worklet.disconnect()}catch(_){} state.worklet=null }
+  if(state.ctx){ try{state.ctx.close()}catch(_){} state.ctx=null }
+  if(state.stream){ state.stream.getTracks().forEach(t=>t.stop()); state.stream=null }
+  floatQ=[]; floatQLen=0;
+  drawMeter(0);
+}
+function stopLive(){
+  state.live=false;
+  clearInterval(state.timerId); clearInterval(state.watchdogId); clearInterval(state.lvlId);
+  clearInterval(state.sumTimerId); state.sumTimerId=null;
+  clearInterval(state.treeTimerId); state.treeTimerId=null;
+  clearInterval(state.skillTimerId); state.skillTimerId=null;
+  clearInterval(state.knowTimerId); state.knowTimerId=null;
+  clearTimeout(state.chunkTimerId); clearTimeout(state.softTimer);
+  if(state.chunkRec && state.chunkRec.state==="recording"){ try{state.chunkRec.stop()}catch(_){} }
+  state.chunkRec=null;
+  if(state.ws){ try{state.ws.close()}catch(_){} state.ws=null }
+  if(state.elWs){ try{state.elWs.close()}catch(_){} state.elWs=null }
+  cleanupAudio();
+  $("recBtn").classList.remove("rec");
+  $("recHint").textContent="停止しました。赤いボタンでもう一度開始できます。";
+  // 終了時: 構造化メモの最終版を生成（会議モードは最終まとめカンペも）
+  state.nextSumAt=0;
+  if(state.key && !state.mock && state.utts.length>2){
+    wslog("終了→構造化メモの最終版を生成");
+    if(meetingMode()) scheduleCue();
+    runMemo(true);
+    runSkill();  // ロープレチェックも最終判定
+    runKnow();   // ナレッジレーンも残りの発話を収穫して締める
+  }
+  if(!state.mock && state.key) runTree();  // ツリーも残りの発話を反映して締める
+  saveSession();  // 書き起こし・判定・メモ・ツリーをブラウザ内に保存（最終版は生成完了時に上書き保存される）
+  updateRunButtons();
+}
+
+function updateRunButtons(){
+  const run=state.live||state.mock;
+  $("stopBtn").disabled = !run;
+  tplSelects().forEach(s=>{ s.disabled = run });  // 実行中のテンプレ切替は不可
+  $("recMini").classList.toggle("on", run);
+  applyTab();  // テンプレバーの表示条件（書き起こしタブ専用×実行中は畳む）を再評価
+}
+$("stopBtn").onclick=()=>{ if(state.live) stopLive(); if(state.mock) stopMock() };
+$("restartBtn").onclick=()=>{
+  const wasMock=state.mock, wasLive=state.live;
+  if(wasLive) stopLive();
+  if(wasMock) stopMock();
+  resetAll();
+  // 動作中だった場合は同じ設定でその場から再スタート（ビデオの撮り直し用）
+  if(wasMock) $("mockBtn").click();
+  else if(wasLive) $("recBtn").click();
+};
+function resetAll(){
+  state.utts=[]; state.interim="";  state.follow=true; $("jumpBtn").classList.add("hidden");
+  renderTranscript(); renderCoverage([]);
+  $("timer").textContent="0:00";
+  $("trBadge").innerHTML=""; $("trMeta").textContent="";
+  $("cueBadge").innerHTML=""; $("cueMeta").textContent="";
+  $("signalBar").className="signal-bar"; $("sigWord").textContent="—"; resetApo();
+  $("sigMeta").textContent="シグナル判定：発話ごとに即時更新";
+  const card=$("cueCard"); card.className="cue-card";
+  $("cueVerdict").textContent="待機中"; $("cueVerdict").setAttribute("style","background:#F1EFF6;color:var(--sub)");
+  $("cueHeadline").textContent="会話が始まると、ここに指示が出ます";
+  $("cueDetail").textContent = meetingMode() ? `約${tplMeta().summaryMin||10}分ごとに要約と進行の提案が出ます。` : "数発話ごとに判定が更新されます。";
+  $("counterBox").classList.add("hidden"); $("qList").innerHTML="";
+  $("checkBody").innerHTML='<div class="check-note">判定が始まると、ここに埋まり具合が出ます</div>';
+  $("cueLog").innerHTML=""; $("cueLog").style.display="none";
+  resetMemo(); resetTree(); resetSkill(); resetKnow(); state.forceMemo=false; applyTab();
+  clearErr();
+};
+
+// ---------- 構造化メモ（会議モード・10分ごとに全文から再生成） ----------
+// 表示は整形（見出し・箇条書き・チェックボックス・太字のみの軽量Markdown）、コピーは生Markdownのまま
+function mdToHtml(md){
+  const inline=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>");
+  let html="", inUl=false;
+  const closeUl=()=>{ if(inUl){ html+="</ul>"; inUl=false } };
+  const openUl=()=>{ if(!inUl){ html+='<ul class="md-ul">'; inUl=true } };
+  for(const raw of md.split("\n")){
+    const t=raw.trim();
+    if(!t){ closeUl(); continue }
+    let m;
+    if(m=t.match(/^(#{1,4})\s+(.*)/)){ closeUl(); const lv=Math.min(3,Math.max(2,m[1].length)); html+=`<div class="md-h md-h${lv}">${inline(m[2])}</div>` }
+    else if(m=t.match(/^[-*]\s+\[([ xX])\]\s*(.*)/)){ openUl(); html+=`<li class="md-task">${m[1]===" "?"☐":"☑"} ${inline(m[2])}</li>` }
+    else if(m=t.match(/^[-*]\s+(.*)/)){ openUl(); html+=`<li>${inline(m[1])}</li>` }
+    else { closeUl(); html+=`<p class="md-p">${inline(t)}</p>` }
+  }
+  closeUl();
+  return html;
+}
+function memoPrompt(final){
+  if(interviewMode()) return `あなたは採用最終面接の書記です。面接の書き起こし全文（音声認識の誤りを含む）から、面接官が面接直後に社内へ共有する「面接メモ（総評ドラフト）」をMarkdownで作成します。毎回、メモ全体を最新の状態に作り直してください。${final?"\n\n【面接は終了しました。社内共有用の最終版として全体を清書してください】":""}
+
+構成（この順・この見出しで書く）:
+## 人物像（信念形成）
+生い立ち・家族・学生時代・就職の経緯から、候補者の信念と、それが形成された背景を3〜5行で。書き起こしにある具体的な出来事・数字・順位を必ず入れる。
+## 確認項目ごとの要約
+与えられた確認項目それぞれに「### 項目名」の小見出しを立て、会話から分かった中身を1〜3行で。「◯◯を確認した」のようなメタ表現は禁止で、内容そのものを書く。まだ話に出ていない項目は「（未確認）」とだけ書く。
+## 併願と志望理由
+併願先・第一志望・「なぜ当社か」の答えの中身と、その深さの評価。
+## 懸念点
+見送り要因になりうる発言・態度を、根拠となる発言とともに箇条書き。なければ「（なし）」。
+## 面談結果（発言があった場合のみ）
+合否の心証／評点／提示年収／配属候補／現場申し送り事項／内定承諾に向けた追加アクションの要否。会話で言及されていない項目は「不明」と書き、推測しない。
+## 次のアクション
+「- [ ] 内容（担当: ○○ / 期限: ○○）」の形式。なければ「（なし）」。
+
+ルール: 書き起こしにない情報は書かない・推測で補わない。固有名詞は書き起こしの表記のまま。そのままコピーして共有できる品質で、簡潔に。出力はMarkdown本文のみ（前置き・後書き不要）。`;
+  if(!meetingMode()) return `あなたは商談・インタビューの書記です。会話の書き起こし全文（音声認識の誤りを含む）から、事前に設定された「確認項目」ごとに整理した構造化メモをMarkdownで作成します。毎回、メモ全体を最新の状態に作り直してください。${final?"\n\n【会話は終了しました。共有用の最終版として全体を清書してください】":""}
+
+構成（この順・この見出しで書く）:
+## 確認項目ごとの要約
+与えられた確認項目それぞれに「### 項目名」の小見出しを立て、会話から分かった中身を1〜3行で要約する。「◯◯を確認した」のようなメタ表現は禁止で、内容そのものを書く（例: 前職は商社の海外営業。創業20年目。趣味はゴルフ）。まだ話に出ていない項目は「（未確認）」とだけ書く。
+## 決定・合意事項
+決まったこと・合意できたことだけを箇条書き。なければ「（なし）」。
+## 宿題・次のアクション
+「- [ ] 内容（担当: ○○ / 期限: ○○）」の形式。不明なら（担当未定）（期限未定）と明記。なければ「（なし）」。
+
+ルール: 書き起こしにない情報は書かない・推測で補わない。固有名詞は書き起こしの表記のまま。そのままコピーして共有できる品質で、簡潔に。出力はMarkdown本文のみ（前置き・後書き不要）。`;
+  return `あなたは社内会議の書記です。会議の書き起こし全文（音声認識の誤りを含む）から、構造化された議事メモをMarkdownで作成します。毎回、メモ全体を最新の状態に作り直してください。${final?"\n\n【会議は終了しました。共有用の最終版として全体を清書してください】":""}
+
+構成（この順・この見出しで書く）:
+## アジェンダ別の要点
+登録されたアジェンダ項目ごとに「### 項目名」の小見出しを立て、議論の要点と結論を箇条書き2〜4点で。まだ話されていない項目は「（未着手）」とだけ書く。アジェンダにない話題が出た場合は「### その他」にまとめる。
+## 決定事項
+決まったことだけを箇条書き。なければ「（なし）」。
+## 宿題・ToDo
+「- [ ] 内容（担当: ○○ / 期限: ○○）」の形式。担当・期限が会話に出ていなければ（担当未定）（期限未定）と明記。
+## 持ち越し・次回
+決められなかった論点や次回に回すこと。なければ「（なし）」。
+
+ルール: 書き起こしにない情報は書かない・推測で補わない。固有名詞は書き起こしの表記のまま。[自分]/[相手]ラベルがない発言の発言者は断定しない。そのままコピーして共有できる品質で、簡潔に。出力はMarkdown本文のみ（前置き・後書き不要）。`;
+}
+async function runMemo(final, manual){
+  if(!state.key || state.mock || !state.utts.length || state.memoBusy) return;
+  if(state.memoEditing) return;                 // 編集中は更新しない
+  // 引き継ぎモード: 編集済みメモを正本として維持し、前回以降の新しい会話だけを取り込む
+  const inherit = state.memoEdited && !!state.memoMd;
+  if(inherit && state.utts.length<=state.memoUttCount){
+    if(manual) $("memoMeta").textContent="前回の更新以降、新しい会話はありません（編集内容は維持されています）";
+    return;
+  }
+  state.memoBusy=true;
+  $("memoMeta").innerHTML='<span class="spin"></span> 更新中…';
+  const model=llmModel();
+  try{
+    const transcript=state.utts.map(u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`).join("\n");
+    const agenda=$("agendaInput").value.split("\n").map(s=>s.trim()).filter(Boolean);
+    const secondSec = meetingMode()
+      ? `# アジェンダ\n${agenda.length?agenda.map(a=>"- "+a).join("\n"):"（未登録。話題から適切な見出しを立てる）"}`
+      : `# 確認項目（この順に見出しを立てる）\n${checklistItems().map(x=>"- "+x).join("\n")}`;
+    const fmtUtt=u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`;
+    const uttSec = inherit
+      ? `# 現行メモ（ユーザーが編集済み・これが正本）\n${state.memoMd}\n\n# 新しく追加された会話（この分だけを現行メモに取り込む。新しいものほど下）\n${state.utts.slice(state.memoUttCount).map(fmtUtt).join("\n")}`
+      : `# 書き起こし全文（新しいものほど下）\n${transcript}`;
+    const user=`# ${meetingMode()?"会議":"この会話"}のゴール\n${$("goalInput").value.trim()||"（未設定）"}\n\n${secondSec}\n\n# 時間\n経過 ${Math.round(elapsed()/60)}分\n\n${uttSec}`;
+    const inheritSec=inherit?`
+
+【最重要・引き継ぎモード】ユーザーが手で編集した「現行メモ」を渡します。これが正本です。
+- 現行メモの構成・言い回し・削除の判断をそのまま維持する。ユーザーが消した項目や記述を、書き起こしから復活させない
+- 「新しく追加された会話」から得られた情報だけを、現行メモの適切な場所に追記・更新する
+- 新しい情報がなければ、現行メモをそのまま返す`:"";
+    const mk=(noReason)=>{
+      const b={model, messages:[{role:"system",content:memoPrompt(final)+inheritSec},{role:"user",content:user}]};
+      if(!noReason && /^gpt-5/.test(model)) b.reasoning_effort=/^gpt-5\./.test(model)?"none":"minimal";
+      return b;
+    };
+    let r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(false))});
+    let j=await r.json();
+    if(j.error && /reasoning|unsupported|param/i.test(j.error.message||"")){
+      r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(true))});
+      j=await r.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    state.memoMd=(j.choices[0].message.content||"").trim();
+    state.memoCount++;
+    state.memoUttCount=state.utts.length;  // ここまでの発話は反映済み（引き継ぎモードの差分基準）
+    $("memoBody").innerHTML=mdToHtml(state.memoMd);
+    $("memoMeta").textContent=(final?"最終版 / ":"")+(inherit?"編集を維持して更新・":"")+`更新${state.memoCount}回目・${fmtT(elapsed())}時点`;
+  }catch(e){
+    $("memoMeta").textContent="メモ更新に失敗（次の周期で再試行）";
+    wslog("メモ更新エラー: "+e.message);
+  }finally{
+    state.memoBusy=false;
+    saveSession();  // 10分ごとのスナップショット＋最終版の上書き保存（クラッシュ対策）
+  }
+}
+function resetMemo(){
+  state.memoMd=""; state.memoCount=0; state.memoEdited=false; state.memoEditing=false; state.memoUttCount=0;
+  const ta=document.getElementById("memoEditArea"); if(ta) ta.remove();
+  $("memoBody").style.display="";
+  if($("memoEditBtn")){ $("memoEditBtn").textContent="編集"; $("memoCancelBtn").classList.add("hidden") }
+  $("memoBody").textContent="（まだメモはありません）";
+  $("memoMeta").textContent="開始すると、ここにメモが育っていきます";
+}
+// summaryMin分ごとの自動更新タイマー（開始時と、手動まとめ後の仕切り直しで使う）
+function startSumTimer(){
+  clearInterval(state.sumTimerId);
+  state.nextSumAt=Date.now()+sumMs();
+  state.sumTimerId=setInterval(()=>{
+    state.nextSumAt=Date.now()+sumMs();
+    if(state.utts.length){
+      if(meetingMode()) scheduleCue();  // 進行カンペのタイマー駆動は会議モードのみ（営業系は発話駆動）
+      runMemo(false);                   // 構造化メモは全モード
+    }
+  }, sumMs());
+}
+$("memoNowBtn").onclick=()=>{
+  if(state.mock){ $("memoMeta").textContent="モック再生中は使えません"; return }
+  if(!state.key){ $("memoMeta").textContent="OpenAIキーを設定すると使えます（設定タブ）"; return }
+  if(!state.utts.length){ $("memoMeta").textContent="まだ会話がありません"; return }
+  if(state.memoBusy) return;
+  if(state.live && state.sumTimerId) startSumTimer();  // 手動実行の直後に自動が重ならないよう周期を仕切り直す
+  runMemo(false, true);
+};
+// メモの編集（Markdownソースを直接編集。行を消す＝項目の削除）
+$("memoEditBtn").onclick=()=>{
+  if(state.memoEditing){  // 保存
+    const ta=$("memoEditArea");
+    state.memoMd=(ta.value||"").trim();
+    state.memoEditing=false;
+    state.memoEdited=!!state.memoMd;  // 空にして保存した場合は「編集なし」に戻り、次回はゼロから作り直す
+    ta.remove(); $("memoBody").style.display="";
+    $("memoBody").innerHTML = state.memoMd ? mdToHtml(state.memoMd) : "（まだメモはありません）";
+    $("memoEditBtn").textContent="編集"; $("memoCancelBtn").classList.add("hidden");
+    $("memoMeta").textContent= state.memoMd
+      ? "編集を保存しました。以降の更新は編集内容を維持したまま、新しい会話だけを追記します"
+      : "メモを空にしました。次回の更新でゼロから作り直します";
+    // 対応するセッション履歴にもメモだけ上書き保存（他のメタは触らない）
+    if(state.sessId){
+      const list=loadSessions(), it=list.find(x=>x.id===state.sessId);
+      if(it){ it.memoMd=state.memoMd; persistSessions(list); renderSessions() }
+    }
+    return;
+  }
+  if(!state.memoMd){ $("memoMeta").textContent="まだメモがありません"; return }
+  state.memoEditing=true;
+  const ta=document.createElement("textarea");
+  ta.id="memoEditArea"; ta.value=state.memoMd;
+  ta.style.cssText="width:100%;min-height:320px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.7;padding:12px 14px;border:1.5px solid var(--purple-line);border-radius:6px;resize:vertical";
+  $("memoBody").style.display="none";
+  $("memoBody").after(ta); ta.focus();
+  $("memoEditBtn").textContent="保存"; $("memoCancelBtn").classList.remove("hidden");
+  $("memoMeta").textContent="Markdownを直接編集できます（行を消す＝項目の削除。保存で反映）";
+};
+$("memoCancelBtn").onclick=()=>{
+  if(!state.memoEditing) return;
+  state.memoEditing=false;
+  const ta=$("memoEditArea"); if(ta) ta.remove();
+  $("memoBody").style.display="";
+  $("memoEditBtn").textContent="編集"; $("memoCancelBtn").classList.add("hidden");
+  $("memoMeta").textContent="編集を破棄しました";
+};
+$("memoCopyBtn").onclick=async ()=>{
+  if(state.memoEditing){ $("memoMeta").textContent="編集中です。保存してからコピーしてください"; return }
+  if(!state.memoMd){ $("memoMeta").textContent="まだメモがありません"; return }
+  try{ await navigator.clipboard.writeText(state.memoMd); $("memoMeta").textContent="Markdownをコピーしました"; }
+  catch(_){ // クリップボードAPI不許可環境の保険: 隠しテキストエリア経由で生Markdownをコピー
+    const ta=document.createElement("textarea");
+    ta.value=state.memoMd; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    const ok=document.execCommand("copy"); ta.remove();
+    $("memoMeta").textContent= ok ? "Markdownをコピーしました" : "コピーできませんでした（.md保存を使ってください）";
+  }
+};
+$("memoDlBtn").onclick=()=>{
+  if(!state.memoMd){ $("memoMeta").textContent="まだメモがありません"; return }
+  const d=new Date(), pad=n=>String(n).padStart(2,"0");
+  const slug=($("titleInput").value.trim()||"meeting-memo").replace(/[\\\/:*?"<>|\s]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)||"meeting-memo";
+  const name=`${slug}-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.md`;
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([state.memoMd],{type:"text/markdown"}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+};
+
+// ---------- トピックツリー（議論の地図。45秒ごとにLLMが差分ノードを返して育つ） ----------
+const TREE_SCHEMA={type:"object",additionalProperties:false,properties:{
+  nodes:{type:"array",items:{type:"object",additionalProperties:false,properties:{
+    chapter_id:{type:"string",description:"追加先チャプターのid。新しい話題の大きな塊なら\"NEW\""},
+    new_chapter_title:{type:"string",description:"NEWのときの章タイトル（12字以内）。それ以外は空文字"},
+    parent_id:{type:"string",description:"ぶら下げる親ノードのid。チャプター直下なら空文字"},
+    kind:{type:"string",enum:["point","info","decide","task","hot"]},
+    text:{type:"string",description:"論点単位の要約。30字以内"}
+  },required:["chapter_id","new_chapter_title","parent_id","kind","text"]}}
+},required:["nodes"]};
+function treePrompt(){
+  return `あなたは会議・商談の議論を「チャプター → トピックツリー」の地図に整理する書記です。現在のツリー構造と、新しく追加された会話の書き起こし（音声認識の誤りを含む）を渡します。新しい会話から、ツリーに追加すべきノードだけを返してください。
+- ノードは発言の引用ではなく論点単位の要約（30字以内）。相槌・雑談・既存ノードと同内容は追加しない。追加なし（nodes: []）で構わない
+- チャプターは話題の大きな塊。大きく切り替わったときだけ chapter_id="NEW"（new_chapter_titleは12字以内）。細かな展開は既存チャプター内のノードで表現する
+- 深掘り・具体化・反論は、元になったノードのidをparent_idに指定してぶら下げる。チャプターの新しい観点はparent_id=""
+- 会話が以前の話題に戻ったときは、遠慮なく古いチャプターの該当ノードの下にぶら下げる（このツリーの価値はそこにある）
+- kind: point=論点・主張 / info=事例・数字・情報 / decide=決まったこと / task=宿題（担当・期限が出ていれば含める） / hot=意見が割れている・温度の高い論点
+- 1回の追加は最大5ノード。`;
+}
+function treeOutline(){
+  if(!state.tree.chapters.length) return "（まだ空です）";
+  return state.tree.chapters.map(c=>`[${c.id}] ${c.title}\n`+c.nodes.map(n=>`  (${n.id}) parent=${n.parent||"root"} ${n.text}`).join("\n")).join("\n");
+}
+function chapterOf(id){ return state.tree.chapters.find(c=>c.id===id) }
+function mergeTree(items){
+  const newIds=[];
+  (items||[]).forEach(it=>{
+    if(!it || !(it.text||"").trim()) return;
+    let ch;
+    if(it.chapter_id!=="NEW" && chapterOf(it.chapter_id)){ ch=chapterOf(it.chapter_id) }
+    else if(it.chapter_id==="NEW" && (it.new_chapter_title||"").trim()){
+      ch={id:"c"+(++state.treeSeq.c), title:it.new_chapter_title.trim().slice(0,14), nodes:[]};
+      state.tree.chapters.push(ch);
+    }else{
+      ch=state.tree.chapters[state.tree.chapters.length-1];
+      if(!ch){ ch={id:"c"+(++state.treeSeq.c), title:"議論", nodes:[]}; state.tree.chapters.push(ch) }
+    }
+    const isOldChapter = ch!==state.tree.chapters[state.tree.chapters.length-1];  // 前の話題への「戻り」判定
+    const parentOk = ch.nodes.some(n=>n.id===it.parent_id);
+    ch.nodes.push({
+      id:"n"+(++state.treeSeq.n), parent:parentOk?it.parent_id:"",
+      kind:["point","info","decide","task","hot"].includes(it.kind)?it.kind:"point",
+      text:String(it.text).trim().slice(0,60), t:Math.round(elapsed()), ret:isOldChapter
+    });
+    newIds.push(ch.nodes[ch.nodes.length-1].id);
+  });
+  if(newIds.length) renderTree(newIds);
+  return newIds;
+}
+function renderTree(popIds){
+  const root=$("treeChapters"); if(!root) return;
+  const pop=new Set(popIds||[]);
+  if(!state.tree.chapters.length){
+    root.innerHTML='<div class="empty-hint" style="padding:40px">会話が始まると、ここに議論の地図が育ちます（ホイールでズーム・ドラッグで移動）</div>';
+    $("treeMeta").textContent="";
+    return;
+  }
+  const nodeHtml=n=>`<div class="tnode ${esc(n.kind)}${n.ret?" ret":""}${pop.has(n.id)?" popin":""}">${n.ret?'<span class="back">戻り</span>':""}${esc(n.text)}<span class="tm">${fmtT(n.t)}</span></div>`;
+  const buildUl=(ch,parent)=>{
+    const kids=ch.nodes.filter(n=>(n.parent||"")===parent);
+    if(!kids.length) return "";
+    return `<ul>${kids.map(n=>`<li${n.ret?' class="return"':""}>${nodeHtml(n)}${buildUl(ch,n.id)}</li>`).join("")}</ul>`;
+  };
+  root.innerHTML=state.tree.chapters.map((ch,i)=>
+    `<div class="chapter"><div class="ch-head"><div class="no">CHAPTER ${i+1}</div><div class="ttl">${esc(ch.title)}</div></div><div class="tree">${buildUl(ch,"")}</div></div>`
+  ).join("");
+  const total=state.tree.chapters.reduce((a,c)=>a+c.nodes.length,0);
+  $("treeMeta").textContent=`${state.tree.chapters.length}チャプター・${total}ノード`;
+}
+async function runTree(){
+  if(state.mock || !state.key || state.treeBusy) return;
+  if(state.utts.length<=state.treeLastUttCount) return;
+  state.treeBusy=true;
+  const from=state.treeLastUttCount, model=llmModel();
+  try{
+    const newUtts=state.utts.slice(from);
+    const user=`# 現在のツリー（id付き）\n${treeOutline()}\n\n# 新しく追加された会話（この分だけを反映する。新しいものほど下）\n${newUtts.map(u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`).join("\n")}`;
+    const mk=(fb)=>{
+      const b={model, messages:[{role:"system",content:treePrompt()+(fb?"\n必ず {nodes:[{chapter_id,new_chapter_title,parent_id,kind,text}]} のJSONだけを出力。":"")},{role:"user",content:user}]};
+      b.response_format = fb ? {type:"json_object"} : {type:"json_schema",json_schema:{name:"tree_diff",strict:true,schema:TREE_SCHEMA}};
+      if(/^gpt-5/.test(model) && !fb) b.reasoning_effort=/^gpt-5\./.test(model)?"none":"minimal";
+      return b;
+    };
+    let r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(false))});
+    let j=await r.json();
+    if(j.error && /response_format|json_schema|reasoning|unsupported|param/i.test(j.error.message||"")){
+      r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(true))});
+      j=await r.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    const d=JSON.parse(j.choices[0].message.content);
+    const added=mergeTree(Array.isArray(d.nodes)?d.nodes:[]);
+    state.treeLastUttCount=state.utts.length;  // 失敗時は進めず次回リトライに含める
+    if(added.length) wslog("ツリー更新: +"+added.length+"ノード");
+  }catch(e){ wslog("ツリー更新エラー: "+e.message) }
+  finally{ state.treeBusy=false }
+}
+function resetTree(){ state.tree={chapters:[]}; state.treeSeq={c:0,n:0}; state.treeLastUttCount=0; renderTree() }
+// ズーム＆パン（ホイール=ズーム・ドラッグ=移動・「全体」=俯瞰フィット）
+(function(){
+  const vp=$("treeVp"), cv=$("treeCanvas");
+  let scale=1, tx=0, ty=0, drag=null;
+  const apply=()=>{ cv.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; $("tzPct").textContent=Math.round(scale*100)+"%" };
+  const zoomAt=(mx,my,f)=>{ const ns=Math.min(2.5,Math.max(0.2,scale*f)); f=ns/scale; tx=mx-(mx-tx)*f; ty=my-(my-ty)*f; scale=ns; apply() };
+  vp.addEventListener("wheel",e=>{ e.preventDefault(); const r=vp.getBoundingClientRect(); zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.12:0.89) },{passive:false});
+  vp.addEventListener("pointerdown",e=>{ drag={x:e.clientX-tx,y:e.clientY-ty}; vp.classList.add("dragging"); vp.setPointerCapture(e.pointerId) });
+  vp.addEventListener("pointermove",e=>{ if(drag){ tx=e.clientX-drag.x; ty=e.clientY-drag.y; apply() } });
+  vp.addEventListener("pointerup",()=>{ drag=null; vp.classList.remove("dragging") });
+  $("tzIn").onclick=()=>zoomAt(vp.clientWidth/2, vp.clientHeight/2, 1.25);
+  $("tzOut").onclick=()=>zoomAt(vp.clientWidth/2, vp.clientHeight/2, 0.8);
+  $("tzFit").onclick=()=>{
+    const w=cv.scrollWidth, h=cv.scrollHeight;
+    scale=Math.max(Math.min(vp.clientWidth/w, vp.clientHeight/h, 1), 0.2);
+    tx=Math.max((vp.clientWidth-w*scale)/2, 0); ty=8; apply();
+  };
+})();
+
+// ---------- ロープレチェック（skillChecksを持つテンプレートで約25秒ごとに実践度を判定） ----------
+const SKILL_SCHEMA={type:"object",additionalProperties:false,properties:{
+  items:{type:"array",items:{type:"object",additionalProperties:false,properties:{
+    i:{type:"integer",description:"チェック項目の番号（0始まり・与えられた順）"},
+    s:{type:"string",enum:["f","p","m"],description:"f=十分実践できた p=部分的・不十分 m=まだ"},
+    n:{type:"string",description:"判定根拠を20字以内で。mなら空文字"}
+  },required:["i","s","n"]}}
+},required:["items"]};
+// 実測の発話比率（話者ラベル付き発話の文字数ベース。ラベルがなければnull）
+function talkRatio(){
+  let me=0, peer=0;
+  state.utts.forEach(u=>{ if(u.who==="me") me+=u.text.length; else if(u.who==="peer") peer+=u.text.length });
+  const tot=me+peer;
+  if(tot<80) return null;
+  const p=Math.round(peer/tot*10);
+  return {peer:p, me:10-p};
+}
+function skillPrompt(){
+  return `あなたは法人向けインタビューのロープレ評価者です。進行中の会話の書き起こし（[自分]=担当者側/[相手]=顧客側の推定ラベルつき・誤認識あり）を読み、担当者が各チェック項目をどこまで実践できているかを判定します。
+- f=十分実践できた / p=部分的・不十分 / m=まだ行われていない
+- 手順系の項目（冒頭の型・クロージング等）は、一度満たされたら前回判定を維持してよい
+- 「直近の傾向で判定し直す」と書かれた項目（発話比率・話法）は、現在の状態で毎回判定し直す
+- 実測の発話比率が与えられた場合はそれを優先して判定する
+- nは根拠を20字以内で（mは空文字）。全項目を番号順に返す`;
+}
+function renderSkill(list){
+  const el=$("skillBody"); if(!el) return;
+  const items=tplMeta().skillChecks||[];
+  if(!list || !list.length){ el.innerHTML='<div class="check-note">開始すると、ここに進め方のチェックが出ます</div>'; return }
+  const icon={filled:"✓",partial:"△",missing:"—"};
+  const nameOf=s=>{ const ix=s.search(/[:：]/); return ix>0 ? s.slice(0,ix) : s };
+  el.innerHTML=list.map(c=>
+    `<div class="check-item st-${esc(c.status)}"><span class="ic">${icon[c.status]||"—"}</span><div><div class="nm">${esc(nameOf(c.item))}</div>${c.note?`<div class="note">${esc(c.note)}</div>`:""}</div></div>`
+  ).join("");
+  const r=talkRatio();
+  $("skillMeta").textContent=(r?`実測の発話比率 相手${r.peer}:自分${r.me} ・ `:"")+`${fmtT(elapsed())}時点`;
+}
+async function runSkill(){
+  const items=tplMeta().skillChecks||[];
+  if(!items.length || state.mock || !state.key || state.skillBusy) return;
+  if(state.utts.length<=state.skillLastUttCount) return;
+  state.skillBusy=true;
+  const model=llmModel();
+  try{
+    const prev=(state.skillState||[]).filter(c=>c.status!=="missing");
+    const prevSec=prev.length?`\n\n# 前回までの判定\n${prev.map(c=>`- [${c.status==="filled"?"f":"p"}] ${c.item.split(/[:：]/)[0]}: ${c.note||""}`).join("\n")}`:"";
+    const r=talkRatio();
+    const ratioSec=r?`\n\n# 実測の発話比率（ラベル付き発話の文字数ベース）\n相手${r.peer}:自分${r.me}`:"";
+    const transcript=state.utts.slice(-80).map(u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`).join("\n");
+    const user=`# チェック項目（番号つき）\n${items.map((x,i)=>`${i}: ${x}`).join("\n")}${prevSec}${ratioSec}\n\n# ここまでの会話（直近・新しいものほど下）\n${transcript}`;
+    const mk=(fb)=>{
+      const b={model, messages:[{role:"system",content:skillPrompt()+(fb?"\n必ず {items:[{i,s,n}]} のJSONだけを出力。":"")},{role:"user",content:user}]};
+      b.response_format = fb ? {type:"json_object"} : {type:"json_schema",json_schema:{name:"skill_check",strict:true,schema:SKILL_SCHEMA}};
+      if(/^gpt-5/.test(model) && !fb) b.reasoning_effort=/^gpt-5\./.test(model)?"none":"minimal";
+      return b;
+    };
+    let res=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(false))});
+    let j=await res.json();
+    if(j.error && /response_format|json_schema|reasoning|unsupported|param/i.test(j.error.message||"")){
+      res=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(true))});
+      j=await res.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    const d=JSON.parse(j.choices[0].message.content);
+    const list=(Array.isArray(d.items)?d.items:[]).map(c=>({
+      item: items[c.i] ?? ("項目"+((c.i??0)+1)),
+      status: ({f:"filled",p:"partial",m:"missing"})[c.s]||"missing",
+      note: c.n||""
+    }));
+    state.skillState=list;
+    state.skillLastUttCount=state.utts.length;
+    renderSkill(list);
+  }catch(e){ wslog("ロープレチェック更新エラー: "+e.message) }
+  finally{ state.skillBusy=false }
+}
+function resetSkill(){ state.skillState=null; state.skillLastUttCount=0; renderSkill(null); if($("skillMeta")) $("skillMeta").textContent="" }
+
+// ---------- ナレッジレーン（エンティティ正規化・VoC収穫・関連知見。30秒ごと） ----------
+// 名寄せ辞書: 一次判定はクライアント照合（誤認識由来の幻エンティティを防ぐためLLM単独判定にしない）
+// kind: competitor=競合 / partner=連携・共存 / noteは社内メモ（確認タブのみに表示・顧客共有面には出さない）
+const ENTITY_DICT=[
+  {name:"MiiTel",       kind:"competitor", aliases:["ミーテル","みーてる","miitel"], note:"電話解析が主戦場・IP電話一体型"},
+  {name:"amptalk",      kind:"competitor", aliases:["アンプトーク","あんぷとーく","amptalk","アンプトック"], note:"商談解析・SFA連携が強み"},
+  {name:"ナレッジワーク", kind:"competitor", aliases:["ナレッジワーク","ナレッジワークス"], note:"正面競合・イネーブルメント文脈"},
+  {name:"Notta",        kind:"competitor", aliases:["ノッタ","notta"], note:"議事録・文字起こし型"},
+  {name:"AmiVoice",     kind:"competitor", aliases:["アミボイス","amivoice"], note:"医療・コンタクトセンター系に強い"},
+  {name:"Zoom",         kind:"partner",    aliases:["ズーム","zoom"], note:"会議ツール。録画連携の話題になりやすい"},
+  {name:"Teams",        kind:"partner",    aliases:["チームズ","チームス","teams"], note:"会議ツール"},
+  {name:"Salesforce",   kind:"partner",    aliases:["セールスフォース","salesforce","sfdc"], note:"競合でなく共存・連携の相手として扱う"},
+  {name:"kintone",      kind:"partner",    aliases:["キントーン","kintone"], note:"連携要望が出やすい"}
+];
+// 関連知見パック（第1段: 同梱サンプル。実運用では自社FAQ・トークキットに差し替える前提）
+const KNOWLEDGE_PACK=[
+  {id:"k1", title:"録音許諾の切り返し", trig:"録音 許諾 同意 嫌がる 心配",
+   body:"「録音を残す」でなく「その場で文字と要約にして終わったらお渡しする」と説明する。音声を保存しない構成ならその旨を言い切る。要約をその場で渡す提案が許諾の交換条件として有効。"},
+  {id:"k2", title:"生データ返却は禁句", trig:"解約 返却 データ 引き上げ",
+   body:"「データをお返しします」とは言わない。生データ（音声等）は規約に基づき削除、解析結果はエクスポート可能、という整理で答える。"},
+  {id:"k3", title:"議事録ツールとの違い", trig:"議事録 文字起こし 比較 違い Notta",
+   body:"「残す」ツールとの比較には乗らず、「使える形に構造化して蓄積し、横断で活用する」軸で返す。議事録は出発点で、価値は蓄積後の検索・分析・引き継ぎにある。"},
+  {id:"k4", title:"導入効果の物差し", trig:"効果 ROI 費用対効果 メリット",
+   body:"会議前の集計・聞き直し時間（人数×時間/週）、報告のバラつき→標準化、引き継ぎ工数、の3点で物差しを合意してから金額の話へ。"},
+  {id:"k5", title:"セキュリティ質問への一次回答", trig:"セキュリティ 保存 学習 データの扱い",
+   body:"処理の流れ・保存方針は正確さ最優先。即答できない項目は「持ち帰って正確に回答します」と宣言する（その場の誤答が最悪）。"},
+  {id:"k6", title:"競合比較の土俵整理", trig:"競合 他社 比較検討 MiiTel amptalk",
+   body:"電話特化型／議事録型／イネーブルメント型で土俵が違う。自社は「会話データの構造化と蓄積」の軸に土俵を引き直して比較する。"},
+  {id:"k7", title:"価格の話が早く出たとき", trig:"価格 料金 いくら 費用",
+   body:"価格単体で答えず、効果の物差し（k4）とセットで提示する前提を作る。予算感・決裁・導入時期の確認質問に切り返す。"},
+  {id:"k8", title:"トライアルの進め方", trig:"トライアル PoC お試し 検証",
+   body:"対象にする会議の種類と評価基準（何が確認できたら導入か）を先に合意してから開始する。無目的トライアルは失注ルート。"}
+];
+function knowPrompt(){
+  return `あなたは営業会話から「VoC」「エンティティ」「関連ナレッジ」を収穫する解析器です。新しく追加された会話（音声認識の誤りを含む）だけを対象に抽出します。
+- voc: 相手側（[相手]ラベルを最重視）の発言から、要望・不満・称賛を抽出。summaryは発言内容の要約30字以内。既出一覧と同じ内容は返さない。typeが「要望」のときは、開発起票に必要な観点（背景/期待動作/頻度/影響範囲/回避策）のうち会話でまだ確認できていないものをmissingに列挙する
+- entities: 新しく言及された競合・製品・サービスの名前（既知一覧にあるものは除く。書き起こしに明示的に名前が出たものだけ。誤認識が疑わしい場合は含めない）
+- knowledge: ナレッジ目次から、いまの話題への回答・切り返しに直接役立つものだけを最大2件（関連が弱ければ空配列）
+- 該当がなければ各配列は空でよい。無理に埋めない`;
+}
+const KNOW_SCHEMA={type:"object",additionalProperties:false,properties:{
+  voc:{type:"array",items:{type:"object",additionalProperties:false,properties:{
+    type:{type:"string",enum:["要望","不満","称賛"]},
+    target:{type:"string",description:"対象の機能・領域。15字以内"},
+    summary:{type:"string",description:"発言内容の要約。30字以内"},
+    missing:{type:"array",items:{type:"string"},description:"要望のとき、起票に足りない観点。それ以外は空配列"}
+  },required:["type","target","summary","missing"]}},
+  entities:{type:"array",items:{type:"string"}},
+  knowledge:{type:"array",items:{type:"string"}}
+},required:["voc","entities","knowledge"]};
+// クライアント側の辞書照合（発話確定のたび・コストゼロ）
+function matchEntities(text){
+  const low=text.toLowerCase();
+  let hit=false;
+  ENTITY_DICT.forEach(e=>{
+    if(e.aliases.some(a=>low.includes(a.toLowerCase()))){
+      const ex=state.know.entities.find(x=>x.name===e.name);
+      if(ex){ ex.count++; } else { state.know.entities.push({name:e.name, kind:e.kind, note:e.note, count:1}) }
+      hit=true;
+    }
+  });
+  if(hit) renderKnow();
+}
+function renderKnow(){
+  if(!$("entChips")) return;
+  const K=state.know;
+  const kindLabel={competitor:"競合", partner:"連携", unknown:"新規"};
+  $("entChips").innerHTML=(K.entities||[]).map(e=>
+    `<span class="ent-chip ${esc(e.kind)}" title="${esc(e.note||"")}"><span class="k">${kindLabel[e.kind]||"?"}</span>${esc(e.name)}${e.count>1?`<span class="cnt">×${e.count}</span>`:""}</span>`
+  ).join("") || '<div class="check-note" style="margin-top:8px">競合・製品名が言及されると、ここに正規化されたタグが並びます</div>';
+  const noted=(K.entities||[]).filter(e=>e.note);
+  const vcls={"要望":"v-req","不満":"v-neg","称賛":"v-pos"};
+  $("vocList").innerHTML=(K.voc||[]).map(v=>
+    `<div class="voc-row ${vcls[v.type]||"v-req"}"><span class="vt">${esc(v.type)}</span><span class="tgt">${esc(v.target)}</span>　${esc(v.summary)}${(v.missing||[]).length?`<div class="miss">起票に足りない観点: ${v.missing.map(esc).join(" / ")}</div>`:""}</div>`
+  ).join("");
+  $("kbList").innerHTML=(K.kb||[]).map(id=>{
+    const k=KNOWLEDGE_PACK.find(x=>x.id===id);
+    return k?`<div class="kb-card"><div class="kt">関連知見: ${esc(k.title)}</div>${esc(k.body)}</div>`:"";
+  }).join("");
+}
+async function runKnow(){
+  if(state.mock || !state.key || state.knowBusy) return;
+  if(state.utts.length<=state.knowLastUttCount) return;
+  state.knowBusy=true;
+  const from=state.knowLastUttCount, model=llmModel();
+  try{
+    const newUtts=state.utts.slice(from);
+    const knownNames=[...state.know.entities.map(e=>e.name), ...ENTITY_DICT.map(e=>e.name)];
+    const vocDone=(state.know.voc||[]).map(v=>`- ${v.type}: ${v.target} / ${v.summary}`).join("\n")||"（なし）";
+    const kbIndex=KNOWLEDGE_PACK.map(k=>`${k.id}: ${k.title}（キーワード: ${k.trig}）`).join("\n");
+    const user=`# 既知のエンティティ（返さない）\n${knownNames.join(", ")}\n\n# 既出のVoC（同内容は返さない）\n${vocDone}\n\n# ナレッジ目次\n${kbIndex}\n\n# 新しく追加された会話（新しいものほど下）\n${newUtts.map(u=>`[${fmtT(u.t)}]${u.who?(u.who==="me"?"[自分]":"[相手]"):""} ${u.text}`).join("\n")}`;
+    const mk=(fb)=>{
+      const b={model, messages:[{role:"system",content:knowPrompt()+(fb?"\n必ず {voc:[{type,target,summary,missing}], entities:[], knowledge:[]} のJSONだけを出力。":"")},{role:"user",content:user}]};
+      b.response_format = fb ? {type:"json_object"} : {type:"json_schema",json_schema:{name:"know",strict:true,schema:KNOW_SCHEMA}};
+      if(/^gpt-5/.test(model) && !fb) b.reasoning_effort=/^gpt-5\./.test(model)?"none":"minimal";
+      return b;
+    };
+    let r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(false))});
+    let j=await r.json();
+    if(j.error && /response_format|json_schema|reasoning|unsupported|param/i.test(j.error.message||"")){
+      r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+state.key,"Content-Type":"application/json"},body:JSON.stringify(mk(true))});
+      j=await r.json();
+    }
+    if(j.error) throw new Error(j.error.message||JSON.stringify(j.error));
+    const d=JSON.parse(j.choices[0].message.content);
+    (Array.isArray(d.voc)?d.voc:[]).forEach(v=>{
+      if(v && v.type && v.summary) state.know.voc.push({type:v.type, target:String(v.target||"").slice(0,20), summary:String(v.summary).slice(0,40), missing:(v.missing||[]).slice(0,5)});
+    });
+    (Array.isArray(d.entities)?d.entities:[]).forEach(n=>{
+      const name=String(n||"").trim().slice(0,20);
+      if(name && !state.know.entities.some(e=>e.name===name)) state.know.entities.push({name, kind:"unknown", note:"辞書未登録。要確認", count:1});
+    });
+    (Array.isArray(d.knowledge)?d.knowledge:[]).forEach(id=>{
+      if(KNOWLEDGE_PACK.some(k=>k.id===id) && !state.know.kb.includes(id)) state.know.kb.push(id);
+    });
+    state.know.kb=state.know.kb.slice(-4);  // 関連知見は直近4件まで表示
+    state.knowLastUttCount=state.utts.length;
+    renderKnow();
+    $("knowMeta").textContent=`更新 ${fmtT(elapsed())}時点`;
+  }catch(e){ wslog("ナレッジレーン更新エラー: "+e.message) }
+  finally{ state.knowBusy=false }
+}
+function resetKnow(){
+  state.know={entities:[], voc:[], kb:[]}; state.knowLastUttCount=0;
+  renderKnow();
+  if($("knowMeta")) $("knowMeta").textContent="約30秒ごとに更新";
+}
+
+// ---------- セッション履歴（停止時に自動保存。書き起こし・判定ログ・充足・メモ。音声なし） ----------
+const SESS_STORE="navi-generic-sessions";
+function loadSessions(){ try{ return JSON.parse(localStorage.getItem(SESS_STORE)||"[]")||[] }catch(_){ return [] } }
+function persistSessions(list){
+  try{ localStorage.setItem(SESS_STORE, JSON.stringify(list)) }
+  catch(_){ // 容量超過時は古いものから間引いて再試行
+    while(list.length>1){ list.pop(); try{ localStorage.setItem(SESS_STORE, JSON.stringify(list)); return }catch(__){} }
+  }
+}
+function saveSession(){
+  if(state.mock || !state.sessId || !state.utts.length) return;
+  const s={ id:state.sessId, at:state.sessAt, title:$("titleInput").value.trim(), tpl:$("tplSel").value, mode:tplMeta().mode||"sales",
+    goal:$("goalInput").value, agenda:$("agendaInput").value, durMin:durMin(),
+    sec:Math.round(elapsed()), utts:state.utts, cueHist:state.cueHist.slice(-200),
+    checklist:state.lastChecklist||[], memoMd:state.memoMd, tree:state.tree, skill:state.skillState||[], know:state.know };
+  const list=loadSessions().filter(x=>x.id!==s.id);
+  list.unshift(s);
+  if(list.length>30) list.length=30;  // 最新30件まで
+  persistSessions(list);
+  renderSessions();
+}
+function fmtSessWhen(iso){
+  const d=new Date(iso), pad=n=>String(n).padStart(2,"0");
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function sessionToMd(s){
+  const ic={filled:"✓",partial:"△",missing:"—"};
+  let md=`# ${s.title||s.tpl} — ${fmtSessWhen(s.at)}（${fmtT(s.sec)}）\n\nテンプレート: ${s.tpl}\nゴール: ${s.goal||"（未設定）"}\n`;
+  if((s.agenda||"").trim()) md+=`\nアジェンダ:\n${s.agenda.split("\n").filter(x=>x.trim()).map(x=>"- "+x.trim()).join("\n")}\n`;
+  if(s.memoMd) md+=`\n---\n\n${s.memoMd}\n`;
+  if((s.checklist||[]).length) md+=`\n---\n\n## 確認項目の充足\n${s.checklist.map(c=>`- ${ic[c.status]||"—"} ${c.item}${c.note?`（根拠: ${c.note}）`:""}${c.ask?` ／追加質問例: ${c.ask}`:""}`).join("\n")}\n`;
+  if((s.skill||[]).length) md+=`\n## ロープレチェック\n${s.skill.map(c=>`- ${ic[c.status]||"—"} ${c.item.split(/[:：]/)[0]}${c.note?`（${c.note}）`:""}`).join("\n")}\n`;
+  if((s.cueHist||[]).length) md+=`\n## 判定ログ\n${s.cueHist.map(c=>`- ${fmtT(c.t)} 【${c.v}】${c.h}`).join("\n")}\n`;
+  if(s.know && ((s.know.voc||[]).length || (s.know.entities||[]).length)){
+    md+=`\n## 収穫（エンティティ・VoC）\n`;
+    if((s.know.entities||[]).length)
+      md+=`言及エンティティ: ${s.know.entities.map(e=>`${e.name}（${({competitor:"競合",partner:"連携"})[e.kind]||"新規"}${e.count>1?"×"+e.count:""}）`).join("、")}\n`;
+    (s.know.voc||[]).forEach(v=>{
+      md+=`- [${v.type}] ${v.target}: ${v.summary}${(v.missing||[]).length?`（起票に足りない観点: ${v.missing.join(" / ")}）`:""}\n`;
+    });
+  }
+  if(s.tree && (s.tree.chapters||[]).length){
+    md+=`\n## トピックツリー\n`;
+    s.tree.chapters.forEach((c,i)=>{
+      const lines=[`- 【CHAPTER ${i+1}: ${c.title}】`];
+      const walk=(parent,depth)=>{ (c.nodes||[]).filter(n=>(n.parent||"")===parent).forEach(n=>{
+        lines.push(`${"  ".repeat(depth)}- ${({decide:"[決定] ",task:"[宿題] ",hot:"[白熱] "})[n.kind]||""}${n.text}${n.ret?"（戻り）":""}`);
+        walk(n.id, depth+1);
+      }) };
+      walk("",1);
+      md+=lines.join("\n")+"\n";
+    });
+  }
+  md+=`\n---\n\n## 書き起こし\n${(s.utts||[]).map(u=>`- ${fmtT(u.t)}${u.who?(u.who==="me"?" [自分]":" [相手]"):""} ${u.text}`).join("\n")}\n`;
+  return md;
+}
+function dlText(text,name){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:"text/markdown"}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+function renderSessions(){
+  const el=$("histList"); if(!el) return;
+  const list=loadSessions();
+  $("histMeta").textContent = list.length ? `${list.length}件` : "";
+  el.innerHTML = list.length ? list.map(s=>
+    `<div class="hist-row" data-id="${s.id}">
+      <span class="hist-when">${fmtSessWhen(s.at)}</span>
+      <span class="hist-name">${esc(s.title||s.tpl)}</span>
+      <span class="hist-info">${s.title?esc(s.tpl)+"・":""}${fmtT(s.sec)}・${(s.utts||[]).length}発話${s.memoMd?"・メモあり":""}</span>
+      <span class="hist-btns">
+        <button class="btn-ghost" data-act="resume" style="color:var(--purple);border-color:var(--purple-line)">再開</button>
+        <button class="btn-ghost" data-act="view">表示</button>
+        <button class="btn-ghost" data-act="md">.md保存</button>
+        <button class="btn-ghost" data-act="del">削除</button>
+      </span>
+    </div>`).join("")
+    : '<div class="check-note">停止すると、ここにセッションが自動保存されます（書き起こし・判定・メモ。最新30件・このパソコンのブラウザ内のみ）</div>';
+}
+$("histList").onclick=e=>{
+  const btn=e.target.closest("button"); if(!btn) return;
+  const row=e.target.closest(".hist-row"); if(!row) return;
+  const list=loadSessions(), s=list.find(x=>x.id===row.dataset.id);
+  if(!s) return;
+  const act=btn.dataset.act;
+  if(act==="del"){ persistSessions(list.filter(x=>x.id!==s.id)); renderSessions(); return }
+  if(act==="md"){
+    const d=new Date(s.at), pad=n=>String(n).padStart(2,"0");
+    const slug=(s.title||"session").replace(/[\\\/:*?"<>|\s]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)||"session";
+    dlText(sessionToMd(s), `${slug}-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.md`);
+    return;
+  }
+  if(act==="resume"){
+    if(state.live||state.mock){ showErr("実行中は再開できません。いったん停止してください。"); return }
+    resumeSession(s);
+    return;
+  }
+  if(act==="view"){
+    if(state.live||state.mock){ showErr("実行中は過去セッションを表示できません。停止してから開いてください。"); return }
+    clearErr();
+    state.utts=s.utts||[]; state.interim=""; state.follow=true;
+    renderTranscript();
+    $("trBadge").innerHTML=""; $("trMeta").textContent="保存セッションの表示中";
+    state.memoMd=s.memoMd||"";
+    state.sessId=s.id; state.sessAt=s.at;  // 表示中セッションを編集対象にする（メモ編集の保存先）
+    state.memoEdited=false; state.memoEditing=false;
+    state.forceMemo=!!s.memoMd;  // 保存セッションのメモは、テンプレートに関係なく構造化要約タブで見られるように
+    if(s.memoMd){ $("memoBody").innerHTML=mdToHtml(s.memoMd); $("memoMeta").textContent=`保存セッションの表示中（${fmtSessWhen(s.at)}）` }
+    state.tree = (s.tree && Array.isArray(s.tree.chapters)) ? s.tree : {chapters:[]};
+    renderTree();
+    state.skillState=(s.skill&&s.skill.length)?s.skill:null;
+    renderSkill(state.skillState);
+    state.know=(s.know&&Array.isArray(s.know.entities))?JSON.parse(JSON.stringify(s.know)):{entities:[],voc:[],kb:[]};
+    renderKnow();
+    switchTab("transcript");
+    $("recHint").textContent="保存したセッションを表示しています（書き起こし・ツリー・要約の各タブで閲覧可）。赤いボタンで新しく開始できます。";
+  }
+};
+renderSessions();
+
+// 過去セッションの再開: 会話・判定資産を復元してステージし、次の開始で継ぎ足しモードに入る
+function resumeSession(s){
+  clearErr();
+  if(allTpls().some(t=>t.name===s.tpl)) selectTemplate(s.tpl);
+  if(typeof s.goal==="string" && s.goal) $("goalInput").value=s.goal;
+  if(typeof s.agenda==="string") $("agendaInput").value=s.agenda;
+  if(typeof s.title==="string") $("titleInput").value=s.title;
+  if(s.durMin) $("durInput").value=s.durMin;
+  state.utts=(s.utts||[]).slice(); state.interim="";
+  state.tree=(s.tree&&Array.isArray(s.tree.chapters))?s.tree:{chapters:[]};
+  // ツリーのid連番を復元済みノードの続きから振る（衝突防止）
+  let mc=0, mn=0;
+  state.tree.chapters.forEach(c=>{
+    const m=/^c(\d+)$/.exec(c.id); if(m) mc=Math.max(mc,+m[1]);
+    (c.nodes||[]).forEach(n=>{ const k=/^n(\d+)$/.exec(n.id); if(k) mn=Math.max(mn,+k[1]) });
+  });
+  state.treeSeq={c:mc, n:mn};
+  state.cueHist=(s.cueHist||[]).slice();
+  state.lastChecklist=(s.checklist&&s.checklist.length)?s.checklist.map(c=>({...c})):null;
+  state.skillState=(s.skill&&s.skill.length)?s.skill.map(c=>({...c})):null;
+  state.know=(s.know&&Array.isArray(s.know.entities))?JSON.parse(JSON.stringify(s.know)):{entities:[],voc:[],kb:[]};
+  state.memoMd=s.memoMd||"";
+  state.memoEdited=!!s.memoMd;  // 前回メモを正本として引き継ぎモードで継ぎ足す
+  state.memoEditing=false; state.memoCount=0;
+  state.resumeData={id:s.id, at:s.at, sec:s.sec||0};
+  // 画面反映
+  state.follow=true;
+  renderTranscript(); renderTree(); renderSkill(state.skillState); renderKnow();
+  renderCoverage(state.lastChecklist||[]);
+  if(state.memoMd){ $("memoBody").innerHTML=mdToHtml(state.memoMd); $("memoMeta").textContent="再開待ち（前回までのメモを引き継ぎます）" }
+  else resetMemo();
+  switchTab("transcript");
+  $("recHint").textContent=`「${s.title||s.tpl}」（${fmtT(s.sec||0)}・${(s.utts||[]).length}発話）を再開する準備ができました。赤いボタンで開始すると続きから継ぎ足されます。`;
+}
+
+// ---------- モック会話 ----------
+const MOCK_CHECK = (items)=>{
+  const map={};
+  items.forEach(x=>map[x]={item:x,status:"missing",note:"",ask:""});
+  return map;
+};
+// モック台本は「MEDDPICC 商談ヒアリング」テンプレート前提（fillの番号は同テンプレの項目順）
+const MOCK_SCRIPT = [
+  {d:1200, who:"me", text:"本日はお時間いただきありがとうございます。御社の営業管理のお話を伺いながら、弊社サービスがお役に立てそうかを確認させてください。"},
+  {d:2800, who:"peer", text:"はい、お願いします。とはいえ正直、まだ情報収集の段階ですが。", sig:{s:"green",w:"立ち上がりOK"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"キックオフ",parent_id:"",kind:"point",text:"先方はまだ情報収集の段階"}],
+   cue:{verdict:"ok_proceed",headline:"まず課題の把握から",detail:"温度は中立。機能説明より、現場の困りごと（Pain）の特定から入る。",questions:["いま営業の活動報告まわりで、手間になっていることはありますか？"],exit_signal:"なし",counter_move:"",fill:{}}},
+  {d:3400, who:"me", text:"ありがとうございます。いま営業の活動報告まわりで、手間になっていることはありますか？"},
+  {d:4200, who:"peer", text:"報告の書き方が人によってバラバラで、結局あとから聞き直すことが多いですね。会議前の集計も手作業なので、正直しんどいです。", sig:{s:"green",w:"課題が点灯"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"課題の把握",parent_id:"",kind:"point",text:"報告が人によってバラバラ・手集計"}],
+   cue:{verdict:"dig_deeper",headline:"課題を数字にする",detail:"Painが出た。影響を時間・件数で具体化してMetricsにつなげる。",questions:["集計や聞き直しには、週にどのくらい時間がかかっていますか？","それはどなたのご負担になっていますか？"],exit_signal:"なし",counter_move:"",fill:{5:["partial","報告バラバラ・手集計"]}}},
+  {d:3600, who:"me", text:"その集計や聞き直しには、週にどのくらい時間がかかっていそうですか？"},
+  {d:4200, who:"peer", text:"マネージャー4人が、会議前に2〜3時間ずつは使ってると思います。そこが減るなら価値はありますね。", sig:{s:"green",w:"効果の物差し獲得"},
+   tree:[{chapter_id:"c2",new_chapter_title:"",parent_id:"n2",kind:"info",text:"会議前に週2〜3h×マネージャー4人"}],
+   cue:{verdict:"dig_deeper",headline:"次は決め方を聞く",detail:"Painと効果の物差しが具体化。導入の決まり方（決裁・体制）へ移る。",questions:["こうしたツールのご導入は、最終的にどなたのご決裁になりますか？","導入を決める際は、どんな進み方になりそうですか？"],exit_signal:"なし",counter_move:"",fill:{5:["filled","週2-3h×Mgr4人の手集計"],0:["partial","会議準備時間の削減"]}}},
+  {d:3400, who:"me", text:"ちなみに、こうしたツールのご導入は、最終的にどなたのご決裁になりますか？"},
+  {d:4600, who:"peer", text:"金額次第ですが、たぶん役員会ですね。私から上申する形になると思います。あと実は、他社さんの話もひとつ聞いてまして。", sig:{s:"green",w:"決裁構造が見えた"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"決裁と競合",parent_id:"",kind:"point",text:"決裁は金額次第で役員会・本人が上申"},{chapter_id:"c3",new_chapter_title:"",parent_id:"",kind:"info",text:"他社1社も検討中"}],
+   cue:{verdict:"dig_deeper",headline:"比較の土俵を確認",detail:"決裁は役員会・目の前の方が上申者（推進者候補）。選定基準と競合へ。",questions:["比較されるとしたら、どんな点を重視されますか？","差し支えなければ、他社さんはどちらをご覧になっていますか？"],exit_signal:"なし",counter_move:"",fill:{5:["filled","週2-3h×Mgr4人の手集計"],0:["partial","会議準備時間の削減"],1:["partial","金額次第で役員会"],3:["partial","本人が上申→役員会"],6:["partial","目の前の方が上申者"],7:["partial","他社1社を検討中"]}}},
+  {d:3000, who:"peer", text:"すみません、ちょっと次の予定が入っていまして。続きはまた今度でもいいですか。", sig:{s:"red",w:"多忙・時間切れ"},
+   tree:[{chapter_id:"c3",new_chapter_title:"",parent_id:"",kind:"hot",text:"時間切れ。次回への接続が必要"}],
+   cue:{verdict:"exit_signal",headline:"要求を小さくして繋ぐ",detail:"時間切れの離脱シグナル。ここで終えず、次回の小さな合意に切り替える。",questions:[],exit_signal:"多忙・時間切れ",counter_move:"「承知しました。では1点だけ。役員会でご説明しやすい効果試算入りの資料をご用意しますので、来週30分だけデモをご覧いただけませんか」",fill:{5:["filled","週2-3h×Mgr4人の手集計"],0:["partial","会議準備時間の削減"],1:["partial","金額次第で役員会"],3:["partial","本人が上申→役員会"],6:["partial","目の前の方が上申者"],7:["partial","他社1社を検討中"]}}},
+  {d:4600, who:"me", text:"承知しました。では最後に1点だけ。役員会でご説明しやすい効果試算を入れた資料をご用意しますので、来週30分だけ、実際の画面をご覧いただけませんか。"},
+  {d:3600, who:"peer", text:"それなら助かります。木曜の午後なら空いてますよ。", sig:{s:"green",w:"打診が通った"},
+   tree:[{chapter_id:"c3",new_chapter_title:"",parent_id:"n4",kind:"decide",text:"来週木曜15時にオンラインデモ"},{chapter_id:"c2",new_chapter_title:"",parent_id:"n3",kind:"task",text:"効果試算を作成し前日までに送付"}],
+   cue:{verdict:"wrap_up",headline:"日時をその場で確定",detail:"次回デモの合意が取れた。日時と参加者をこの場で固めて宿題を復唱。",questions:["では木曜15時からオンラインで、マネージャーの方もご一緒にいかがでしょうか？"],exit_signal:"なし",counter_move:"",fill:{5:["filled","週2-3h×Mgr4人の手集計"],0:["partial","会議準備時間の削減"],1:["partial","金額次第で役員会"],3:["partial","デモ→上申→役員会"],6:["partial","目の前の方が上申者"],7:["partial","他社1社を検討中"]}}},
+  {d:3400, who:"me", text:"ありがとうございます。では木曜15時にオンラインで。効果試算の資料は前日までにお送りします。マネージャーの方も、ご都合つけばぜひ。"},
+  {d:2800, who:"peer", text:"わかりました、声をかけてみます。よろしくお願いします。",
+   tree:[{chapter_id:"c3",new_chapter_title:"",parent_id:"n7",kind:"info",text:"マネージャー同席を打診してもらう"}],
+   cue:{verdict:"ok_proceed",headline:"次回合意。締めに入る",detail:"日時・宿題・参加者が確定。選定基準・契約手続きは次回デモで拾う。",questions:[],exit_signal:"なし",counter_move:"",fill:{5:["filled","週2-3h×Mgr4人の手集計"],0:["partial","会議準備時間の削減が物差し","短縮効果を金額でも確認しては？"],1:["partial","金額次第で役員会","役員会の開催サイクルを伺っては？"],3:["partial","デモ→上申→役員会"],6:["filled","上申者がデモ同席へ"],7:["partial","他社1社を検討中","比較中の他社名を伺っては？"]}}}
+];
+
+// >>> MOCK_SCRIPT_CALL（N西: 通信架電テンプレート前提。fillの番号は同テンプレの項目順。sig.p=アポ獲得確率）
+const MOCK_SCRIPT_CALL=[
+  {d:1200, who:"me", text:"お世話になっております。オフィスの電話とインターネット回線の件でお電話いたしました。総務ご担当の方はいらっしゃいますでしょうか。"},
+  {d:3000, who:"peer", text:"総務の山本ですが、どういったご用件でしょう。", sig:{s:"green",w:"担当者につながった",p:20,r:"担当者本人と接続"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"導入",parent_id:"",kind:"point",text:"総務の山本様（担当者本人）につながる"}],
+   cue:{verdict:"ok_proceed",headline:"現状確認から入る",detail:"担当者本人。商品説明より先に、いまの回線の使い方を聞く。",questions:["いま電話とネットは、どちらの回線をお使いですか？"],exit_signal:"なし",counter_move:"",fill:{0:["filled","総務の山本様（担当者本人）"]}}},
+  {d:3200, who:"me", text:"ありがとうございます。いま御社では、電話とネットはどちらの回線をお使いか伺ってもよろしいですか。"},
+  {d:4200, who:"peer", text:"電話は昔からのISDNで、ネットは別の会社の光ですね。請求がバラバラなのはちょっと面倒ですけど。", sig:{s:"green",w:"困りごとが点灯",p:38,r:"旧設備ISDN・請求の分散が判明"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"現状と困りごと",parent_id:"",kind:"point",text:"電話はISDN・ネットは他社光"},{chapter_id:"c2",new_chapter_title:"",parent_id:"",kind:"hot",text:"請求がバラバラで面倒"}],
+   cue:{verdict:"dig_deeper",headline:"ISDN終了から影響へ",detail:"旧設備と請求の困りごとが点灯。移行の必要性と実害につなげる。",questions:["ISDNは提供終了が決まっていますが、移行のご予定はありますか？","請求の取りまとめに、月にどのくらいお時間がかかっていますか？"],exit_signal:"なし",counter_move:"",fill:{0:["filled","総務の山本様（担当者本人）"],1:["filled","電話はISDN・ネットは他社の光"],2:["filled","ISDNを利用中"],3:["partial","回線ごとに請求が分散","請求の取りまとめの手間を伺っては？"]}}},
+  {d:3400, who:"me", text:"ISDNは提供終了が決まっておりまして、移行のご予定はもうお決まりでしょうか。"},
+  {d:3400, who:"peer", text:"うーん、まだ特に考えてないですね。", sig:{s:"green",w:"反応がやや薄い",p:33,r:"移行の話に乗ってこない"},
+   cue:{verdict:"dig_deeper",headline:"具体例で一度だけ切り返す",detail:"防壁。一度だけ身近な具体例で水を向け、反応を見る。",questions:["終了後は今の電話機が使えなくなる場合もあるのですが、ご存じでしたか？"],exit_signal:"なし",counter_move:"",fill:{0:["filled","総務の山本様（担当者本人）"],1:["filled","電話はISDN・ネットは他社の光"],2:["filled","ISDNを利用中・移行は未検討"],3:["partial","回線ごとに請求が分散"]}}},
+  {d:3000, who:"me", text:"実は終了後は、今お使いの電話機がそのままでは使えなくなるケースもありまして。"},
+  {d:3400, who:"peer", text:"はあ……。すみません、いまちょっと来客対応でバタバタしてまして。", sig:{s:"yellow",w:"生返事＋多忙",p:21,r:"生返事と多忙のサイン"},
+   tree:[{chapter_id:"c2",new_chapter_title:"",parent_id:"",kind:"hot",text:"来客対応で手が離せない（撤退サイン）"}],
+   cue:{verdict:"retreat",headline:"無理せず、かけ直しを提案",detail:"生返事と多忙のサイン。粘らず、次の接点を約束して切り上げる。",questions:["山本様への直通のお電話番号を伺ってもよろしいですか？","つながりやすい時間帯はございますか？"],exit_signal:"なし",counter_move:"「お忙しいところ失礼しました。ISDNの移行の件で、あらためてお電話してもよろしいですか。来週火曜の午前と木曜の午後でしたら、どちらがご都合よろしいでしょうか」",fill:{0:["filled","総務の山本様（担当者本人）"],1:["filled","電話はISDN・ネットは他社の光"],2:["filled","ISDNを利用中・移行は未検討"],3:["partial","回線ごとに請求が分散"]}}},
+  {d:4200, who:"me", text:"お忙しいところ失礼いたしました。ISDNの移行の件で、あらためてお電話してもよろしいでしょうか。来週火曜の午前と木曜の午後でしたら、どちらがご都合よろしいですか。"},
+  {d:4000, who:"peer", text:"ああ、助かります。じゃあ木曜の午後、2時ごろなら大丈夫です。", sig:{s:"green",w:"かけ直しに合意",p:40,r:"かけ直し日時に合意・接点を維持"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"次回の約束",parent_id:"",kind:"decide",text:"来週木曜14時に再架電（山本様宛て）"}],
+   cue:{verdict:"wrap_up",headline:"日時と宛先を復唱して切る",detail:"かけ直しの合意が取れた。日時と宛先を復唱し、丁寧に切り上げる。",questions:["来週木曜の14時に、山本様宛てでよろしいでしょうか？"],exit_signal:"なし",counter_move:"",fill:{0:["filled","総務の山本様（担当者本人）"],1:["filled","電話はISDN・ネットは他社の光"],2:["filled","ISDNを利用中・移行は未検討"],3:["partial","回線ごとに請求が分散"],6:["filled","来週木曜14時に再架電"],7:["partial","再架電: 木曜14時・山本様宛て","直通番号も伺っては？"]}}},
+  {d:3800, who:"me", text:"ありがとうございます。では来週木曜の14時に、総務の山本様宛てにお電話いたします。本日はお忙しいところありがとうございました。"},
+  {d:2800, who:"peer", text:"はい、よろしくお願いします。", sig:{s:"green",w:"好印象で切り上げ",p:44,r:"好印象のまま次回の接点を確保"},
+   cue:{verdict:"ok_proceed",headline:"撤退成功。次回はISDNから",detail:"粘らず撤退し次回の日時を確保。次回はISDN終了の影響から入る。",questions:[],exit_signal:"なし",counter_move:"",fill:{0:["filled","総務の山本様（担当者本人）"],1:["filled","電話はISDN・ネットは他社の光"],2:["filled","ISDNを利用中・移行は未検討"],3:["partial","回線ごとに請求が分散"],6:["filled","来週木曜14時に再架電"],7:["partial","再架電: 木曜14時・山本様宛て"]}}}
+];
+// <<< MOCK_SCRIPT_CALL
+
+// >>> MOCK_SCRIPT_INTERVIEW
+// 社長面接テンプレート用のモック台本（架空の候補者: メガバンク法人営業7年・29歳・既婚・同業2社併願）。
+// 面接官の発話は竹内社長の実発言の型を再現。fill の番号は INTERVIEW_TPL.checklist の項目順（0始まり）。
+const MOCK_SCRIPT_INTERVIEW=[
+  {d:1200, who:"me", text:"よろしくお願いします。今日は名古屋から？何時の新幹線で来られたんですか。"},
+  {d:2600, who:"peer", text:"7時台の新幹線で、9時前には東京に着きました。妻に見送ってもらって出てきました。", sig:{s:"green",w:"立ち上がりOK"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"掴み",parent_id:"",kind:"info",text:"名古屋から当日上京・妻の見送りあり"}],
+   cue:{verdict:"ok_proceed",branch:"",headline:"雑談から生い立ちへ",detail:"緊張はほぐれている。履歴書の上から、出身と幼少期に入る。",questions:["ご出身はずっと愛知ですか？どんな少年でした？","それはご兄弟の影響？ご両親の影響？"],exit_signal:"なし",counter_move:"",fill:{6:["partial","妻が見送り（転職は把握している様子）"]}}},
+  {d:3200, who:"me", text:"ありがとうございます。ご出身はずっと愛知で。どんな幼少期でした？"},
+  {d:4400, who:"peer", text:"父が転勤族で、小学校を3回変わりました。野球を高校までやって、県大会ベスト8まで行きました。大学は第一志望に落ちて、地元の私立です。", sig:{s:"green",w:"具体的に語れている"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"生い立ち",parent_id:"",kind:"info",text:"転勤族・転校3回・野球県ベスト8・大学は第一志望落ち"}],
+   cue:{verdict:"dig_deeper",branch:"苦労人・ハングリー（母子家庭・転勤族・体育会）",headline:"変化耐性の背景を線でつなぐ",detail:"転校3回と野球。挫折（受験）の消化と親の職業まで押さえる。",questions:["転校が多い中で、友人と呼べる人はいつの時の人ですか？","差し支えなければ、ご両親はサラリーマンで？","第一志望に落ちた時、どう受け止めました？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8・大学は第一志望落ち","浪人しなかった理由を伺っては？"],6:["partial","妻が見送り"]}}},
+  {d:3400, who:"me", text:"なるほどね。じゃあ現職の話を。法人営業で7年、この表だと支店で2位とありますけど、何名中ですか？"},
+  {d:4200, who:"peer", text:"支店は営業が12名で、2年連続2位です。全店だと約400名中で20位前後だと思います。", sig:{s:"green",w:"数字が出た"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"現職の実績",parent_id:"",kind:"info",text:"支店12名中2位×2年・全店400名中20位前後"}],
+   cue:{verdict:"dig_deeper",branch:"上位だがトップでない（努力型）",headline:"なぜ1位でないかを聞く",detail:"順位と母数は取れた。1位との差分を本人に言語化させ、実力とラッキーを切り分ける。",questions:["2年連続2位で、1位を取れなかった要因は何ですか？","ラッキーと実力の比率は、ご自身ではどう見ていますか？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8・大学は第一志望落ち"],3:["partial","支店12名中2位×2年・全店400名中20位前後","1位との差分を聞いては？"],6:["partial","妻が見送り"]}}},
+  {d:3600, who:"me", text:"2年連続2位で、1位を取れなかった要因は何だと思います？"},
+  {d:4600, who:"peer", text:"1位の先輩は既存の大口を持っていて、私は新規中心でした。ただ、正直に言うと提案の詰めが甘い案件も自分にはありました。", sig:{s:"green",w:"自責で語れている"},
+   tree:[{chapter_id:"c3",new_chapter_title:"",parent_id:"n3",kind:"point",text:"新規中心・提案の詰めの甘さを自責で言語化"}],
+   cue:{verdict:"dig_deeper",branch:"",headline:"転職のトリガーへ",detail:"実績は自責で語れた。次は転職活動を始めた時期と引き金を特定する。",questions:["転職エージェントに登録したのはいつですか？なんで登録したんです？","M&Aという言葉は、いつどこで知りました？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年・新規中心・詰めの甘さを自責で言語化"],6:["partial","妻が見送り"]}}},
+  {d:3200, who:"me", text:"ありがとうございます。転職エージェントに登録したのはいつですか？なんで登録したんです？"},
+  {d:4800, who:"peer", text:"去年の11月です。担当先の社長が後継者がいなくて廃業を選んだのを見て、銀行では出口まで関われないと感じたのがきっかけです。M&Aキャピタルパートナーズさんとストライクさんも受けていて、今週で最終が3本です。", sig:{s:"yellow",w:"同業3本併願"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"転職と併願",parent_id:"",kind:"point",text:"廃業を見た原体験・去年11月登録"},{chapter_id:"c4",new_chapter_title:"",parent_id:"",kind:"hot",text:"同業2社と併願・今週で最終3本"}],
+   cue:{verdict:"dig_deeper",branch:"同業を複数併願（どこでもいい）",headline:"併願を正面から。違いを言わせる",detail:"トリガーは具体的。同業3本併願なので、各社の違いと第一志望を語らせる。",questions:["ざっくりでいいので、3社の違いを言えます？","どこでやりたいと思われてるんですか？それは何でですか？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年・自責で言語化"],4:["filled","去年11月登録・担当先の廃業がトリガー"],5:["partial","担当先の廃業で知った"],6:["partial","妻が見送り"],8:["partial","同業2社と併願・今週最終3本","第一志望と各社の違いを伺っては？"]}}},
+  {d:3000, who:"me", text:"ざっくりでいいので、3社の違いを言えます？その上で、どこでやりたいと思われてるんですか。"},
+  {d:5200, who:"peer", text:"CPさんは大型案件、ストライクさんは着手金がなくスピード感がある印象です。御社は実績と教育体制が一番で、第一志望です。", sig:{s:"red",w:"志望理由が一般論"},
+   tree:[{chapter_id:"c4",new_chapter_title:"",parent_id:"n5",kind:"point",text:"御社は実績と教育体制＝一般論で第一志望"}],
+   cue:{verdict:"exit_signal",branch:"同業を複数併願（どこでもいい）",headline:"立場を入れ替えて本気度を試す",detail:"「実績と教育体制」は誰にでも言える理由。当社固有の理由が出るまで語り直させる。",questions:["実績があるからってことですか？2点目は何ですか？"],exit_signal:"どこでもいい併願",counter_move:"「○○さんが私の立場だった場合、何社も受けられてて、私自身どう思ってると思います？…そうですよね。それに対しての対策はどう取ってきましたか」",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年・自責で言語化"],4:["filled","去年11月登録・担当先の廃業がトリガー"],5:["partial","担当先の廃業で知った"],6:["partial","妻が見送り"],8:["filled","同業2社併願・違いは言える・第一志望は当社"],9:["partial","理由が実績と教育体制の一般論","当社固有の理由を語り直してもらっては？"]}}},
+  {d:3800, who:"me", text:"○○さんが私の立場だった場合、何社も受けられてて、私自身どう思ってると思います？…そうですよね。それに対しての対策はどう取ってきましたか。"},
+  {d:5600, who:"peer", text:"本当に入りたいのか、と思われますよね。対策として、統合報告書と社長のYouTubeは全部見ました。担当先の社長が廃業した時、御社の名刺が机にあったんです。あの時に相談できる人になりたい、それが理由です。", sig:{s:"green",w:"固有の理由が出た"},
+   tree:[{chapter_id:"c4",new_chapter_title:"",parent_id:"n6",kind:"decide",text:"廃業した社長の机に当社の名刺＝固有の志望理由"}],
+   cue:{verdict:"dig_deeper",branch:"",headline:"覚悟と家族へ",detail:"当社固有の理由が出た。振り切った経験と、家族の合意・勤務地を確認して魅力づけに進む。",questions:["29年生きてこられて、めちゃくちゃ振り切ったことはあります？失敗でもいいですよ","奥さんは転職活動について何と言われてるんですか？東京だった場合は？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年・自責で言語化"],4:["filled","去年11月登録・担当先の廃業がトリガー"],5:["filled","廃業を見て知った・統合報告書とYouTubeを読み込み"],6:["partial","妻が見送り","転居の可否を伺っては？"],8:["filled","同業2社併願・第一志望は当社"],9:["filled","廃業した社長の机に当社の名刺＝固有の理由"],13:["partial","統合報告書とYouTubeを読み込み"]}}},
+  {d:3400, who:"me", text:"なるほどね。奥さんは転職活動について何と言われてるんですか？もし東京だった場合は。"},
+  {d:4400, who:"peer", text:"妻も銀行員で、最初は反対でしたが、今は『顔色が良ければいい』と言ってくれています。東京なら一緒に来る予定です。年収は下がっても構いません。", sig:{s:"green",w:"家族合意・年収ダウン受容"},
+   tree:[{chapter_id:"NEW",new_chapter_title:"家族と条件",parent_id:"",kind:"info",text:"妻は当初反対→今は応援・東京同行可・年収ダウン受容"}],
+   cue:{verdict:"wrap_up",branch:"",headline:"魅力づけ→クロージングへ",detail:"三本柱（当社の理由・覚悟・思考の深さ）が立った。逆質問を受けて会社を語り、合否と処遇へ。",questions:["何かご質問ありますか？","（会社の語り）我々はM&Aを売っているのではなくストーリーを売っている。日本で一番高い山は富士山、2番目は誰も答えられない","（年収）希望年収の背景を教えてもらっていいですか。いくらだったらうちに来ます？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年・自責で言語化"],4:["filled","去年11月登録・廃業がトリガー"],5:["filled","廃業を見て知った・統合報告書とYouTube"],6:["filled","妻は当初反対→今は応援・東京同行可"],7:["partial","東京なら同行可","チャネル希望（売り/買い・ダイレクト/ネットワーク）を伺っては？"],8:["filled","同業2社併願・第一志望は当社"],9:["filled","廃業した社長の机に当社の名刺"],11:["partial","年収は下がっても構わない","希望額の根拠を伺っては？"],13:["partial","統合報告書とYouTube"]}}},
+  {d:3600, who:"me", text:"ありがとうございます。結論、採用です。何がいいかというと、廃業した社長の名刺の話を、自分の言葉で語られていた。僕だったら○○さんに会社の譲渡を任せたいなと思いました。年収は制度の説明をしてから、希望の背景を聞かせてください。"},
+  {d:3000, who:"peer", text:"ありがとうございます。制度を伺った上で、固定は現年収の維持をお願いできればと思います。",
+   tree:[{chapter_id:"c5",new_chapter_title:"",parent_id:"n8",kind:"decide",text:"採用・年収は現年収維持ベースで制度説明へ"},{chapter_id:"c5",new_chapter_title:"",parent_id:"n8",kind:"task",text:"配属候補の部長との面談をセット"}],
+   cue:{verdict:"ok_proceed",branch:"",headline:"処遇と次のアクションを固める",detail:"合否と理由は伝えた。制度説明→提示→配属候補→入社時期（四半期）→飛ぶ鳥跡を濁さず。",questions:["AさんとBさんの固定給が違っても同じ実績なら同じ年収になる制度です","メガと地銀、どちらでワクワクしますか？","入社は4/1・7/1・10/1・1/1のいずれか。いつが良いですか？"],exit_signal:"なし",counter_move:"",fill:{0:["partial","転勤族・転校3回"],1:["partial","野球で県ベスト8"],3:["filled","支店12名中2位×2年"],4:["filled","去年11月登録・廃業がトリガー"],5:["filled","統合報告書とYouTube"],6:["filled","妻は応援・東京同行可"],7:["partial","東京なら同行可"],8:["filled","同業2社併願・第一志望は当社"],9:["filled","廃業した社長の机に当社の名刺"],11:["partial","現年収維持を希望・下がっても可"],13:["partial","統合報告書とYouTube"]}}}
+];
+// <<< MOCK_SCRIPT_INTERVIEW
+$("mockBtn").onclick=()=>{
+  if(state.mock){ stopMock(); return }
+  if(state.live) stopLive();
+  clearErr();
+  // モック台本はテンプレートの動作モードで選ぶ: 面接モード→社長面接の台本、それ以外→MEDDPICC台本（fill番号が各テンプレの項目順に対応）
+  const useInterview = interviewMode() && MOCK_SCRIPT_INTERVIEW.length>0;
+  const useCall = !useInterview && callMode();  // N西: 架電テンプレートでは架電台本（アポ獲得確率・撤退サイン）
+  const SCRIPT = useInterview ? MOCK_SCRIPT_INTERVIEW : useCall ? MOCK_SCRIPT_CALL : MOCK_SCRIPT;
+  selectTemplate(useInterview ? INTERVIEW_TPL.name : useCall ? CALL_TPL_NAME : "MEDDPICC 商談ヒアリング");
+  resetApo();
+  state.resumeData=null;  // 再開ステージ中にモックを選んだ場合は破棄
+  state.mock=true;
+  state.t0=Date.now();
+  state.utts=[]; state.interim="";  state.follow=true; $("jumpBtn").classList.add("hidden");
+  renderTranscript(); renderCoverage([]);
+  $("mockBtn").textContent="モックを停止";
+  $("trBadge").innerHTML=badge(true);
+  $("trMeta").textContent="台本再生";
+  $("recHint").textContent="モック会話を再生中です（この画面を前面に表示したままにしてください）。";
+  state.timerId=setInterval(()=>{ $("timer").textContent=fmtT(elapsed()); $("timerMini").textContent=fmtT(elapsed()) },300);
+  updateRunButtons();
+  resetTree();
+  const items=checklistItems();
+  let acc=0;
+  if($("branchChip")){ $("branchChip").classList.add("hidden"); renderPlaybook("") }
+  SCRIPT.forEach(step=>{
+    acc+=step.d;
+    state.mockTimers.push(setTimeout(()=>{
+      state.utts.push({t:elapsed(), text:step.text, who:step.who||null});
+      renderTranscript();
+      if(step.tree) mergeTree(step.tree);                       // ツリーも台本どおりに育つ
+      if(step.sig) renderSignal(step.sig.s, step.sig.w, true);  // 信号は即時
+      if(step.sig && step.sig.p!=null && callMode()) renderApo(step.sig.p, step.sig.r);  // アポ獲得確率も即時
+      if(step.cue){                                             // 詳細カンペは後出し（実際の時間差を再現）
+        state.mockTimers.push(setTimeout(()=>{
+          const base=MOCK_CHECK(items);
+          Object.entries(step.cue.fill||{}).forEach(([i,v])=>{
+            const key=items[+i]; if(key){ base[key].status=v[0]; base[key].note=v[1]; base[key].ask=v[2]||"" }
+          });
+          renderCue({...step.cue, checklist:Object.values(base)}, true);
+        }, 1600));
+      }
+    }, acc));
+  });
+  state.mockTimers.push(setTimeout(()=>{ stopMock("モック会話が終了しました。もう一度再生するか、キーを設定して実会話でお試しください。") }, acc+2500));
+};
+function stopMock(hint){
+  state.mock=false;
+  state.mockTimers.forEach(clearTimeout); state.mockTimers=[];
+  clearInterval(state.timerId);
+  $("mockBtn").textContent = VIEW==="demo" ? "モック会話を再生" : "モック会話を再生（キー不要）";
+  $("recHint").textContent=hint||"赤いボタンで開始。対面はこのままでOK。Zoom/Teamsのリモート会議は「会議の音声を取り込む」を押してから開始してください（ブラウザ会議=会議タブを共有、デスクトップアプリの会議=画面全体＋システム音声。ヘッドホン推奨）。";
+  updateRunButtons();
+}
+</script>
+</body>
+</html>
